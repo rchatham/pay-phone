@@ -28,3 +28,7 @@ Understanding audio jacks: - Might be similar to how handset is wired up.
 Signal Processing: - Do I have to?
 - [Interpreting microphone output signal](https://dsp.stackexchange.com/questions/45117/interpreting-microphone-output-signal)
 
+
+### Payphone Hacking Tutorials and Project Ideas
+- ['90s Payphone Boombox Hack](https://www.instructables.com/id/90s-Payphone-Boombox-Hack/)
+- [PAYPHONE HACKS](https://hackaday.com/tag/payphone/)
