@@ -1,5 +1,5 @@
 # pay-phone
-This repository has code and circuit plans to hack a 1995 Pay Phone.
+This repository has code and circuit plans to hack a 1995 Pay Phone. https://imgur.com/gallery/ZZQrFqB
 
 
 ### Connect Raspberry Pi to Arduino via serial connection
