@@ -1,12 +1,24 @@
 # pay-phone
 This repository has code and circuit plans to hack a 1995 Pay Phone. https://imgur.com/gallery/ZZQrFqB
 
+### Components
+- [Raspberry Pi Zero W](https://www.adafruit.com/product/3400)
+- [Audio Injector RPi Zero Sound Card](http://www.audioinjector.net/rpi-zero)
+- [MakerSpot RPi Zero Docking Hub](https://www.amazon.com/MakerSpot-Stackable-Raspberry-Connector-Bluetooth/dp/B07CPQK9ND)
+- [Arduino Nano](https://www.amazon.com/ELEGOO-Arduino-ATmega328P-Without-Compatible/dp/B0713XK923/ref=sr_1_5?keywords=arduino+nano&qid=1573163867&s=electronics&sr=1-5)
+- [Adafruit Perma-Proto Board](https://www.amazon.com/Adafruit-Perma-Proto-Half-sized-Breadboard-PCB/dp/B00SK8QR8S/ref=sr_1_3?crid=2E5H3ZQ6V08E4&keywords=adafruit+perma-proto&qid=1573163906&s=electronics&sprefix=adafruit+perma%2Celectronics%2C165&sr=1-3)
+
 
 ### Connect Raspberry Pi to Arduino via serial connection
 - [Raspberry Pi - Arduino Serial Communication](https://www.instructables.com/id/Raspberry-Pi-Arduino-Serial-Communication/)
 - [I2C Communication between Arduino and Raspberry Pi](https://create.arduino.cc/projecthub/bmr1314/i2c-communication-between-arduino-and-raspberry-pi-1d00dd)
 - [Serial Communication between Raspberry Pi & Arduino](https://classes.engineering.wustl.edu/ese205/core/index.php?title=Serial_Communication_between_Raspberry_Pi_%26_Arduino)
 - [Home Automation using Raspberry Pi 2](https://create.arduino.cc/projecthub/cyborg-titanium-14/home-automation-using-raspberry-pi-2-windows-10-iot-core-784235?f=1)
+- [SwiftSerial](https://github.com/yeokm1/SwiftSerial)
+
+
+### Raspberry Pi Sound Stuff
+- [Raspberry Pi Zero audio recording with the AudioInjector hat](https://www.richardmudhar.com/blog/2018/07/raspberry-pi-zero-audio-recording-with-the-audioinjector-hat/)
 
 
 ### Arduino stuff
