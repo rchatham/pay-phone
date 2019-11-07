@@ -36,6 +36,6 @@ Signal Processing: - Do I have to?
 
 
 ### Notes
-Handset conections:
+Handset conections: - User your multimeter set to Ohms, the one that registers in kΩ (mine read 110) is the mic and the one registering in Ω is the speaker (mine read 137).
 - Speaker - Blk(GND)/Yel
-- Mic - Grn/Red - not tested
+- Mic - Grn/Red
