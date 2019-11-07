@@ -37,5 +37,7 @@ Signal Processing: - Do I have to?
 
 ### Notes
 Handset conections:
+
 Speaker - Blk(GND)/Yel
+
 Mic - Grn/Red - not tested
