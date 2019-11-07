@@ -32,3 +32,4 @@ Signal Processing: - Do I have to?
 ### Payphone Hacking Tutorials and Project Ideas
 - ['90s Payphone Boombox Hack](https://www.instructables.com/id/90s-Payphone-Boombox-Hack/)
 - [PAYPHONE HACKS](https://hackaday.com/tag/payphone/)
+- [My payphone runs Linux now.](https://www.jwz.org/blog/2016/01/my-payphone-runs-linux-now/)
