@@ -19,6 +19,9 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 
 ### Raspberry Pi Sound Stuff
 - [Raspberry Pi Zero audio recording with the AudioInjector hat](https://www.richardmudhar.com/blog/2018/07/raspberry-pi-zero-audio-recording-with-the-audioinjector-hat/)
+- [Sound configuration on Raspberry Pi with ALSA](http://blog.scphillips.com/posts/2013/01/sound-configuration-on-raspberry-pi-with-alsa/)
+- [Raspberry Pi – Setting Up Your Audio](http://iwearshorts.com/blog/raspberry-pi-setting-up-your-audio/)
+- [SoundcardTesting](https://www.alsa-project.org/main/index.php/SoundcardTesting)
 
 
 ### Arduino stuff
@@ -26,7 +29,7 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 - [sprintf function](https://arduinobasics.blogspot.com/2019/05/sprintf-function.html)
 
 
-### Circuit Hacking
+### Circuit Stuff
 Speaker stuff for handset:
 - [Adafruit Speaker Bonnet for Raspberry Pi](https://learn.adafruit.com/adafruit-speaker-bonnet-for-raspberry-pi)
 
@@ -40,6 +43,10 @@ Understanding audio jacks: - Might be similar to how handset is wired up.
 Signal Processing: - Do I have to?
 - [Interpreting microphone output signal](https://dsp.stackexchange.com/questions/45117/interpreting-microphone-output-signal)
 
+Designing an Electret microphone amplifier circuit:
+- [How to Build an Elecret Microphone Circuit](http://www.learningaboutelectronics.com/Articles/Electret-microphone-circuit.php)
+
+
 
 ### Payphone Hacking Tutorials and Project Ideas
 - ['90s Payphone Boombox Hack](https://www.instructables.com/id/90s-Payphone-Boombox-Hack/)
@@ -50,6 +57,7 @@ Signal Processing: - Do I have to?
 ### Phones and Parts
 - [Old Phone Works](https://www.oldphoneworks.com/)
 - [PayPhone.com](https://www.payphone.com)
+
 
 ### Notes
 **Handset conections:**
