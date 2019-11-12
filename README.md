@@ -47,6 +47,10 @@ Signal Processing: - Do I have to?
 - [My payphone runs Linux now.](https://www.jwz.org/blog/2016/01/my-payphone-runs-linux-now/)
 
 
+### Phones and Parts
+- [Old Phone Works](https://www.oldphoneworks.com/)
+- [PayPhone.com](https://www.payphone.com)
+
 ### Notes
 **Handset conections:**
 Using your multimeter set to Ohms, check the leads coming from the handset. The leads that register in kΩ (mine read 110) is the mic and the ones registering in Ω is the speaker (mine read 137). I was able to figure out which was wires were for the speaker using trial and error by using a trs cable connecting to my iphone while playing some Bo Diddley and when the yellow and black wires were touched to the speaker line and ground respectively you could hear the song playing from the headset. Alternatively if the leads register in MΩ then they don't connect.
