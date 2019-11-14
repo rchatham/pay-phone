@@ -45,7 +45,9 @@ Signal Processing: - Do I have to?
 
 Designing an Electret microphone amplifier circuit:
 - [How to Build an Elecret Microphone Circuit](http://www.learningaboutelectronics.com/Articles/Electret-microphone-circuit.php)
-
+- IN DEPTH: [Simple electret microphone circuit](http://mynixworld.info/2017/09/01/simple-electret-microphone-circuit/)
+- PCB Schematics: [Electret Microphone Amplifier Circuit](https://www.electroschematics.com/electret-microphone-amplifier-circuit/)
+- [Electret condenser microphone amplifier for use in microcontroller projects](https://scienceprog.com/electret-condenser-microphone-amplifier-for-use-in-microcontroller-projects/)
 
 
 ### Payphone Hacking Tutorials and Project Ideas
