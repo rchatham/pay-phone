@@ -59,6 +59,7 @@ Designing an Electret microphone amplifier circuit:
 ### Phones and Parts
 - [Old Phone Works](https://www.oldphoneworks.com/)
 - [PayPhone.com](https://www.payphone.com)
+- [Western Electric Handsets - Receivers & Transmitters](https://beatriceco.com/bti/porticus/bell/telephones-technical-handsets.html)
 
 
 ### Notes
