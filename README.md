@@ -22,7 +22,9 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 - [Sound configuration on Raspberry Pi with ALSA](http://blog.scphillips.com/posts/2013/01/sound-configuration-on-raspberry-pi-with-alsa/)
 - [Raspberry Pi – Setting Up Your Audio](http://iwearshorts.com/blog/raspberry-pi-setting-up-your-audio/)
 - [SoundcardTesting](https://www.alsa-project.org/main/index.php/SoundcardTesting)
-
+- [Adafruit Mono 2.5W Class D Audio Amplifier - PAM8302](https://learn.adafruit.com/products/2130/guides)
+  * [Hooking up Amp to TRS](https://learn.adafruit.com/portable-kippah-pi)
+  * [Soldering Amp to bottom of pi](https://learn.adafruit.com/pocket-pigrrl?view=all)
 
 ### Arduino stuff
 - [Arduino code for Pay Phone](https://create.arduino.cc/editor/rchatham/044c4320-8126-4371-ab3c-54f0d22aaedc)
