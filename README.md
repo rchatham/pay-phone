@@ -50,6 +50,7 @@ Designing an Electret microphone amplifier circuit:
 - IN DEPTH: [Simple electret microphone circuit](http://mynixworld.info/2017/09/01/simple-electret-microphone-circuit/)
 - PCB Schematics: [Electret Microphone Amplifier Circuit](https://www.electroschematics.com/electret-microphone-amplifier-circuit/)
 - [Electret condenser microphone amplifier for use in microcontroller projects](https://scienceprog.com/electret-condenser-microphone-amplifier-for-use-in-microcontroller-projects/)
+- [Simple Microphone (MIC) Amplifier Circuits](https://makingcircuits.com/blog/simple-microphone-mic-amplifier-circuits-using-transistors/)
 
 
 ### Payphone Hacking Tutorials and Project Ideas
