@@ -34,6 +34,7 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 ### Circuit Stuff
 Speaker stuff for handset:
 - [Adafruit Speaker Bonnet for Raspberry Pi](https://learn.adafruit.com/adafruit-speaker-bonnet-for-raspberry-pi)
+- [Speaker Impedance Changes Amplifier Power](https://geoffthegreygeek.com/speaker-impedance-changes-amplifier-power/)
 
 Likely similar to microphone in handset:
 - [Electret Microphone - 20Hz-20KHz Omnidirectional](https://www.adafruit.com/product/1064)
