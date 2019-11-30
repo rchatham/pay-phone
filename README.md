@@ -46,6 +46,7 @@ Signal Processing: - Do I have to?
 - [Interpreting microphone output signal](https://dsp.stackexchange.com/questions/45117/interpreting-microphone-output-signal)
 
 Designing an Electret microphone amplifier circuit:
+- [The Simplest Amplifier Circuit Diagram](https://www.build-electronic-circuits.com/amplifier-circuit-diagram/)
 - [How to Build an Elecret Microphone Circuit](http://www.learningaboutelectronics.com/Articles/Electret-microphone-circuit.php)
 - IN DEPTH: [Simple electret microphone circuit](http://mynixworld.info/2017/09/01/simple-electret-microphone-circuit/)
 - PCB Schematics: [Electret Microphone Amplifier Circuit](https://www.electroschematics.com/electret-microphone-amplifier-circuit/)
