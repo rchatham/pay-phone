@@ -7,6 +7,11 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 - [MakerSpot RPi Zero Docking Hub](https://www.amazon.com/MakerSpot-Stackable-Raspberry-Connector-Bluetooth/dp/B07CPQK9ND)
 - [Arduino Nano](https://www.amazon.com/ELEGOO-Arduino-ATmega328P-Without-Compatible/dp/B0713XK923/ref=sr_1_5?keywords=arduino+nano&qid=1573163867&s=electronics&sr=1-5)
 - [Adafruit Perma-Proto Board](https://www.amazon.com/Adafruit-Perma-Proto-Half-sized-Breadboard-PCB/dp/B00SK8QR8S/ref=sr_1_3?crid=2E5H3ZQ6V08E4&keywords=adafruit+perma-proto&qid=1573163906&s=electronics&sprefix=adafruit+perma%2Celectronics%2C165&sr=1-3)
+- [Adafruit FONA 808 Cellular + GPS Breakout](https://learn.adafruit.com/adafruit-fona-808-cellular-plus-gps-breakout?view=all)
+    * [FONA Tethering to Raspberry Pi or BeagleBone Black](https://learn.adafruit.com/fona-tethering-to-raspberry-pi-or-beaglebone-black?view=all)
+    * [PiPhone - A Raspberry Pi based Cellphone](https://learn.adafruit.com/piphone-a-raspberry-pi-based-cellphone?view=all)
+    * [Geofencing with the FONA 808 & Adafruit IO](https://learn.adafruit.com/geofencing-with-the-fona-808-and-adafruit-io?view=all)
+- [Adafruit Radio Bonnets with OLED Display - RFM69 or RFM9X](https://learn.adafruit.com/adafruit-radio-bonnets/rfm69-raspberry-pi-setup)
 
 
 ### Connect Raspberry Pi to Arduino via serial connection
@@ -25,6 +30,8 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 - [Adafruit Mono 2.5W Class D Audio Amplifier - PAM8302](https://learn.adafruit.com/products/2130/guides)
   * [Hooking up Amp to TRS](https://learn.adafruit.com/portable-kippah-pi)
   * [Soldering Amp to bottom of pi](https://learn.adafruit.com/pocket-pigrrl?view=all)
+- [Speech Synthesis on the Raspberry Pi](https://learn.adafruit.com/speech-synthesis-on-the-raspberry-pi)
+
 
 ### Arduino stuff
 - [Arduino code for Pay Phone](https://create.arduino.cc/editor/rchatham/044c4320-8126-4371-ab3c-54f0d22aaedc)
@@ -56,6 +63,9 @@ Designing an Electret microphone amplifier circuit:
 - [PCB files for Adafruit MAX4466 Electret Mic Amplifier](https://github.com/adafruit/Adafruit-MAX4466-Electret-Mic-Amplifier-PCBs)
 - [Tiny, Low-Cost, Single/Dual-Input, Fixed-Gain Microphone Amplifiers with Integrated Bias](https://www.maximintegrated.com/en/products/analog/audio/MAX9812L.html)
 
+
+### Communication
+- [MQTT, Adafruit IO & You!](https://learn.adafruit.com/mqtt-adafruit-io-and-you?view=all)
 
 ### Payphone Hacking Tutorials and Project Ideas
 - ['90s Payphone Boombox Hack](https://www.instructables.com/id/90s-Payphone-Boombox-Hack/)
