@@ -62,6 +62,7 @@ Designing an Electret microphone amplifier circuit:
 - [Simple Microphone (MIC) Amplifier Circuits](https://makingcircuits.com/blog/simple-microphone-mic-amplifier-circuits-using-transistors/)
 - [PCB files for Adafruit MAX4466 Electret Mic Amplifier](https://github.com/adafruit/Adafruit-MAX4466-Electret-Mic-Amplifier-PCBs)
 - [Tiny, Low-Cost, Single/Dual-Input, Fixed-Gain Microphone Amplifiers with Integrated Bias](https://www.maximintegrated.com/en/products/analog/audio/MAX9812L.html)
+- [Electret Preamp Circuit](https://dxarts.washington.edu/wiki/electret-preamp-circuit)
 
 
 ### Communication
