@@ -20,7 +20,7 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 - [Serial Communication between Raspberry Pi & Arduino](https://classes.engineering.wustl.edu/ese205/core/index.php?title=Serial_Communication_between_Raspberry_Pi_%26_Arduino)
 - [Home Automation using Raspberry Pi 2](https://create.arduino.cc/projecthub/cyborg-titanium-14/home-automation-using-raspberry-pi-2-windows-10-iot-core-784235?f=1)
 - [SwiftSerial](https://github.com/yeokm1/SwiftSerial)
-
+- [Program Your Arduino from Your Raspberry Pi](https://www.hackster.io/techno_z/program-your-arduino-from-your-raspberry-pi-3407d4)
 
 ### Raspberry Pi Sound Stuff
 - [Raspberry Pi Zero audio recording with the AudioInjector hat](https://www.richardmudhar.com/blog/2018/07/raspberry-pi-zero-audio-recording-with-the-audioinjector-hat/)
@@ -63,6 +63,9 @@ Designing an Electret microphone amplifier circuit:
 - [PCB files for Adafruit MAX4466 Electret Mic Amplifier](https://github.com/adafruit/Adafruit-MAX4466-Electret-Mic-Amplifier-PCBs)
 - [Tiny, Low-Cost, Single/Dual-Input, Fixed-Gain Microphone Amplifiers with Integrated Bias](https://www.maximintegrated.com/en/products/analog/audio/MAX9812L.html)
 - [Electret Preamp Circuit](https://dxarts.washington.edu/wiki/electret-preamp-circuit)
+
+Analog to Digital:
+- [Arduino Audio Input](https://www.instructables.com/id/Arduino-Audio-Input/)
 
 
 ### Communication
