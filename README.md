@@ -5,7 +5,8 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 - Type `alsamixer` into the terminal to open the sound preferences.
 - `aplay -l` list audio output devices.
 - `arecord -l` list audio input devices.
-- Test recording on the pi through the usb sound card: `arecord --device=hw:0,0 --format S16_LE -V mono --rate 44100 -c1 test.wav`
+- Test recording on the pi through the usb sound card: 
+   - `arecord --device=hw:0,0 --format S16_LE -V mono --rate 44100 -c1 test.wav`
 
 
 ### Components
