@@ -7,6 +7,7 @@ Start with a Rasbian Buster Lite base image.
 
 - `sudo apt-get update`
 - `sudo apt-get upgrade`
+- `sudo apt-get install alsa-utils`
 - `sudo apt-get install mpg321`
 
 ### Using Sound on the Pi
