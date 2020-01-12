@@ -1,6 +1,14 @@
 # pay-phone
 This repository has code and circuit plans to hack a 1995 Pay Phone. https://imgur.com/gallery/ZZQrFqB
 
+### Getting Started
+
+Start with a Rasbian Buster Lite base image.
+
+- `sudo apt-get update`
+- `sudo apt-get upgrade`
+- `sudo apt-get install mpg321`
+
 ### Using Sound on the Pi
 - Type `alsamixer` into the terminal to open the sound preferences.
 - `aplay -l` list audio output devices.
