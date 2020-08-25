@@ -56,6 +56,9 @@ Start with a Rasbian Buster Lite base image.
 
 
 ### Circuit Stuff
+TRS to TRRS: *NOTE: This is likely why the current circuit is not working for audio*
+- [TRRS TO TRS WIRING DIAGRAM](https://wiringall.com/trrs-to-trs-wiring-diagram.html)
+
 Speaker stuff for handset:
 - [Adafruit Speaker Bonnet for Raspberry Pi](https://learn.adafruit.com/adafruit-speaker-bonnet-for-raspberry-pi)
 - [Speaker Impedance Changes Amplifier Power](https://geoffthegreygeek.com/speaker-impedance-changes-amplifier-power/)
