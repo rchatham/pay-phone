@@ -73,29 +73,6 @@ Understanding audio jacks: - Might be similar to how handset is wired up.
 Signal Processing: - Do I have to?
 - [Interpreting microphone output signal](https://dsp.stackexchange.com/questions/45117/interpreting-microphone-output-signal)
 
-<<<<<<< HEAD
----
-<p align="center">
-    <img src="https://user-images.githubusercontent.com/1342803/36623515-7293b4ec-18d3-11e8-85ab-4e2f8fb38fbd.png" width="320" alt="API Template">
-    <br>
-    <br>
-    <a href="http://docs.vapor.codes/3.0/">
-        <img src="http://img.shields.io/badge/read_the-docs-2196f3.svg" alt="Documentation">
-    </a>
-    <a href="https://discord.gg/vapor">
-        <img src="https://img.shields.io/discord/431917998102675485.svg" alt="Team Chat">
-    </a>
-    <a href="LICENSE">
-        <img src="http://img.shields.io/badge/license-MIT-brightgreen.svg" alt="MIT License">
-    </a>
-    <a href="https://circleci.com/gh/vapor/api-template">
-        <img src="https://circleci.com/gh/vapor/api-template.svg?style=shield" alt="Continuous Integration">
-    </a>
-    <a href="https://swift.org">
-        <img src="http://img.shields.io/badge/swift-5.1-brightgreen.svg" alt="Swift 5.1">
-    </a>
-</p>
-=======
 Designing an Electret microphone amplifier circuit: 
 - Videos: [1](https://www.youtube.com/watch?v=ts-JqEVzvDo), [2](https://www.youtube.com/watch?v=SToBPCajwc0)
 - [The Simplest Amplifier Circuit Diagram](https://www.build-electronic-circuits.com/amplifier-circuit-diagram/)
@@ -134,4 +111,3 @@ Using your multimeter set to Ohms, check the leads coming from the handset. The 
 - Mic - Grn/Red
 
 UPDATE: I fried the mic in my original handset the first time I used it so I found a place I could buy replacement parts. This is the new [speaker](https://www.payphone.com/BT-R8-Receiver.html) and [microphone](https://www.payphone.com/Noise-Canceling-Microphone.html).
->>>>>>> 239d4f864b638b4ef3fccbd82e3af4d5a74f1853
