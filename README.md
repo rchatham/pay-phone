@@ -104,6 +104,9 @@ Analog to Digital:
 - [Western Electric Handsets - Receivers & Transmitters](https://beatriceco.com/bti/porticus/bell/telephones-technical-handsets.html)
 
 
+### Telephone Software
+- https://github.com/asterisk/asterisk
+
 ### Notes
 **Handset conections:**
 Using your multimeter set to Ohms, check the leads coming from the handset. The leads that register in kΩ (mine read 110) is the mic and the ones registering in Ω is the speaker (mine read 137). I was able to figure out which was wires were for the speaker using trial and error by using a trs cable connecting to my iphone while playing some Bo Diddley and when the yellow and black wires were touched to the speaker line and ground respectively you could hear the song playing from the headset. Alternatively if the leads register in MΩ then they don't connect.
