@@ -6,5 +6,60 @@ DerivedData/
 .DS_Store
 .swiftpm
 db.sqlite
-__pycache__/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+pip-log.txt
+pip-delete-this-directory.txt
+.venv
+venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.cover
+.hypothesis/
+
+# Secrets & Configuration
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+id_rsa*
+/tmp/payphone_ssh_key
+
+# Logs
+*.log
+logs/
+/var/log/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Audio files (can be large)
+audio_files/*.wav
+audio_files/*.mp3
+!audio_files/.gitkeep
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+.cache/
