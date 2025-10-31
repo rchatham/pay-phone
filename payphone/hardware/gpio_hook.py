@@ -29,8 +29,10 @@ class GPIOHookSwitch:
         self.callback = callback
         self.running = False
         self.last_state = None
+        self.poll_thread = None
 
-        # Debounce settings
+        # Polling and debounce settings
+        self.poll_interval = 0.05  # Poll every 50ms
         self.debounce_time = 0.1
 
         logger.info(f"Hook switch initialized in {self.mode} mode with pins {self.hook_pins}")
@@ -45,14 +47,6 @@ class GPIOHookSwitch:
             # Hook switch connects pin to ground when handset is lifted
             pin = self.hook_pins[0]
             GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-
-            # Setup interrupt-based detection
-            GPIO.add_event_detect(
-                pin,
-                GPIO.BOTH,
-                callback=self._hook_changed,
-                bouncetime=int(self.debounce_time * 1000)
-            )
 
             # Get initial state
             self.last_state = GPIO.input(pin)
@@ -70,19 +64,44 @@ class GPIOHookSwitch:
 
             GPIO.setup(input_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-            # Setup interrupt on input pin
-            GPIO.add_event_detect(
-                input_pin,
-                GPIO.BOTH,
-                callback=self._hook_changed,
-                bouncetime=int(self.debounce_time * 1000)
-            )
-
             # Get initial state
             self.last_state = GPIO.input(input_pin)
             logger.info(f"Hook switch GPIO initialized (2-pin mode) on pins {self.hook_pins}")
-        
-    def _hook_changed(self, channel):
+
+        # Start polling thread
+        self.running = True
+        self.poll_thread = threading.Thread(target=self._poll_loop, daemon=True)
+        self.poll_thread.start()
+        logger.info("Hook switch polling thread started")
+
+    def _poll_loop(self):
+        """Polling loop to monitor hook switch state"""
+        last_stable_state = self.last_state
+        last_change_time = time.time()
+
+        while self.running:
+            # Read current state
+            if self.mode == '1pin':
+                current_state = GPIO.input(self.hook_pins[0])
+            else:  # 2pin mode
+                current_state = GPIO.input(self.hook_pins[1])
+
+            # Check if state changed
+            if current_state != last_stable_state:
+                # State changed, start debounce timer
+                if time.time() - last_change_time >= self.debounce_time:
+                    # Debounce period passed, accept the change
+                    last_stable_state = current_state
+                    self._hook_changed()
+                last_change_time = time.time()
+            else:
+                # State is stable, reset change time
+                last_change_time = time.time()
+
+            # Sleep for poll interval
+            time.sleep(self.poll_interval)
+
+    def _hook_changed(self):
         """Handle hook switch state change"""
         if self.mode == '1pin':
             # Read the single pin
@@ -122,9 +141,10 @@ class GPIOHookSwitch:
         
     def cleanup(self):
         """Cleanup GPIO resources"""
-        if self.mode == '1pin':
-            GPIO.remove_event_detect(self.hook_pins[0])
-            GPIO.cleanup(self.hook_pins[0])
-        else:  # 2pin mode
-            GPIO.remove_event_detect(self.hook_pins[1])
-            GPIO.cleanup(self.hook_pins)
+        # Stop polling thread
+        self.running = False
+        if self.poll_thread and self.poll_thread.is_alive():
+            self.poll_thread.join(timeout=1.0)
+
+        # Cleanup GPIO pins
+        GPIO.cleanup(self.hook_pins)

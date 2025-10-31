@@ -7,16 +7,17 @@ from ..audio.handler import AudioHandler
 logger = logging.getLogger(__name__)
 
 class PhoneTree:
-    def __init__(self, 
+    def __init__(self,
                  audio_file: str,
                  options: Optional[Dict[str, 'PhoneTree']] = None,
                  action: Optional[Callable] = None,
-                 timeout: int = 30):
+                 timeout: int = 30,
+                 audio_handler=None):
         self.audio_file = audio_file
         self.options = options or {}
         self.action = action
         self.timeout = timeout
-        self.audio_handler = AudioHandler()
+        self.audio_handler = audio_handler if audio_handler is not None else AudioHandler()
         
     def navigate(self, 
                  input_queue: queue.Queue,

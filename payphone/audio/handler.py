@@ -9,6 +9,11 @@ logger = logging.getLogger(__name__)
 class AudioHandler:
     def __init__(self, audio_dir: str = "audio_files"):
         self.audio_dir = audio_dir
+
+        # Set SDL audio device to USB audio (use plughw for format conversion)
+        os.environ['SDL_AUDIODRIVER'] = 'alsa'
+        os.environ['AUDIODEV'] = 'plughw:CARD=Set,DEV=0'
+
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
         self.current_playback = None
         

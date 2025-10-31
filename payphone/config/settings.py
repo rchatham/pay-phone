@@ -1,5 +1,9 @@
 import os
 import json
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+load_dotenv()
 
 class Config:
     # Hardware mode selection
