@@ -111,8 +111,8 @@ class GPIOHookSwitch:
         else:  # 2pin mode
             # Read the input pin (pin 1)
             current_state = GPIO.input(self.hook_pins[1])
-            # HIGH = connected (off hook), LOW = disconnected (on hook)
-            off_hook = (current_state == GPIO.HIGH)
+            # HIGH = connected (on hook), LOW = disconnected (off hook)
+            off_hook = (current_state == GPIO.LOW)
 
         if current_state != self.last_state:
             self.last_state = current_state
@@ -132,8 +132,8 @@ class GPIOHookSwitch:
             # LOW = off hook
             return GPIO.input(self.hook_pins[0]) == GPIO.LOW
         else:  # 2pin mode
-            # HIGH = off hook (pins connected)
-            return GPIO.input(self.hook_pins[1]) == GPIO.HIGH
+            # LOW = off hook (pins disconnected)
+            return GPIO.input(self.hook_pins[1]) == GPIO.LOW
         
     def set_callback(self, callback: Callable):
         """Set or update the callback function"""
