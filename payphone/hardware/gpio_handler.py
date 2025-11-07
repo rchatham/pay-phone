@@ -65,11 +65,9 @@ class GPIOHandler:
     def stop(self):
         """Stop all GPIO monitoring and cleanup"""
         self.running = False
-        
-        # Stop components
+
+        # Stop components (they clean up their own GPIO pins)
         self.keypad.stop()
         self.hook_switch.cleanup()
-        
-        # Final cleanup
-        GPIO.cleanup()
+
         logger.info("GPIO handler stopped")

@@ -78,31 +78,56 @@ class GPIOKeypad:
     def start(self):
         """Start scanning the keypad"""
         self.running = True
-        thread = threading.Thread(target=self._scan_loop)
-        thread.daemon = True
-        thread.start()
+        self.scan_thread = threading.Thread(target=self._scan_loop)
+        self.scan_thread.daemon = True
+        self.scan_thread.start()
         logger.info("Keypad scanning started")
-        
+
     def _scan_loop(self):
         """Main scanning loop"""
         last_key = None
-        
+        scan_count = 0
+        first_scan = True
+
         while self.running:
             key = self.scan_keypad()
-            
+            scan_count += 1
+
+            # Log first successful scan to confirm scanning is working
+            if first_scan and scan_count == 1:
+                logger.info(f"Keypad scanning loop active - monitoring for button presses")
+                first_scan = False
+
+            # Log scanning activity every 500 scans (~5 seconds)
+            if scan_count % 500 == 0:
+                logger.debug(f"Keypad scanning active (scan #{scan_count})")
+
             if key and key != last_key:
                 # New key pressed
                 current_time = time.time()
+                logger.debug(f"Key detected: {key} (last={last_key}, debounce_ok={current_time - self.last_key_time > self.debounce_time})")
                 if current_time - self.last_key_time > self.debounce_time:
                     self.input_queue.put(key)
-                    logger.debug(f"Key pressed: {key}")
+                    logger.info(f"Key pressed: {key}")
                     self.last_key_time = current_time
-                    
+
             last_key = key
             time.sleep(0.01)  # Small delay to prevent CPU overload
             
     def stop(self):
         """Stop scanning and cleanup"""
         self.running = False
-        time.sleep(0.1)
-        GPIO.cleanup(self.row_pins + self.col_pins)
+
+        # Wait for scanning thread to finish
+        if hasattr(self, 'scan_thread') and self.scan_thread.is_alive():
+            logger.debug("Waiting for keypad scanning thread to finish...")
+            self.scan_thread.join(timeout=1.0)
+            if self.scan_thread.is_alive():
+                logger.warning("Keypad scanning thread did not exit cleanly")
+
+        # Cleanup GPIO pins
+        try:
+            GPIO.cleanup(self.row_pins + self.col_pins)
+            logger.debug("Keypad GPIO pins cleaned up")
+        except Exception as e:
+            logger.warning(f"Error cleaning up keypad GPIO: {e}")

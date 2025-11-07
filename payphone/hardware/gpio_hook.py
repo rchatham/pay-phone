@@ -74,10 +74,15 @@ class GPIOHookSwitch:
         self.poll_thread.start()
         logger.info("Hook switch polling thread started")
 
+        # Report initial state to callback (so system knows state at startup)
+        time.sleep(0.1)  # Give polling thread time to start
+        self._report_initial_state()
+
     def _poll_loop(self):
         """Polling loop to monitor hook switch state"""
         last_stable_state = self.last_state
-        last_change_time = time.time()
+        last_change_time = None
+        unstable_state = None
 
         while self.running:
             # Read current state
@@ -86,17 +91,24 @@ class GPIOHookSwitch:
             else:  # 2pin mode
                 current_state = GPIO.input(self.hook_pins[1])
 
-            # Check if state changed
+            # Check if state changed from stable state
             if current_state != last_stable_state:
-                # State changed, start debounce timer
-                if time.time() - last_change_time >= self.debounce_time:
-                    # Debounce period passed, accept the change
+                # State is different from stable
+                if unstable_state is None or unstable_state != current_state:
+                    # First time seeing this new state, start debounce timer
+                    unstable_state = current_state
+                    last_change_time = time.time()
+                    logger.debug(f"Hook switch state changing: {last_stable_state} -> {current_state}")
+                elif time.time() - last_change_time >= self.debounce_time:
+                    # Debounce period passed with stable reading, accept the change
+                    logger.info(f"Hook switch state stabilized: {last_stable_state} -> {current_state}")
                     last_stable_state = current_state
+                    unstable_state = None
                     self._hook_changed()
-                last_change_time = time.time()
             else:
-                # State is stable, reset change time
-                last_change_time = time.time()
+                # State matches stable state, reset unstable tracking
+                unstable_state = None
+                last_change_time = None
 
             # Sleep for poll interval
             time.sleep(self.poll_interval)
@@ -111,8 +123,8 @@ class GPIOHookSwitch:
         else:  # 2pin mode
             # Read the input pin (pin 1)
             current_state = GPIO.input(self.hook_pins[1])
-            # HIGH = connected (on hook), LOW = disconnected (off hook)
-            off_hook = (current_state == GPIO.LOW)
+            # HIGH = connected (off hook), LOW = disconnected (on hook)
+            off_hook = (current_state == GPIO.HIGH)
 
         if current_state != self.last_state:
             self.last_state = current_state
@@ -132,9 +144,21 @@ class GPIOHookSwitch:
             # LOW = off hook
             return GPIO.input(self.hook_pins[0]) == GPIO.LOW
         else:  # 2pin mode
-            # LOW = off hook (pins disconnected)
-            return GPIO.input(self.hook_pins[1]) == GPIO.LOW
-        
+            # HIGH = off hook (pins connected)
+            return GPIO.input(self.hook_pins[1]) == GPIO.HIGH
+
+    def _report_initial_state(self):
+        """Report the initial hook state to the callback"""
+        off_hook = self.get_state()
+        logger.info(f"Hook switch initial state: {'OFF HOOK' if off_hook else 'ON HOOK'}")
+
+        if self.callback:
+            # Call callback with initial state
+            threading.Thread(
+                target=self.callback,
+                args=(off_hook,)
+            ).start()
+
     def set_callback(self, callback: Callable):
         """Set or update the callback function"""
         self.callback = callback
