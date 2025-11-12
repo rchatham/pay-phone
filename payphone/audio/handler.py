@@ -175,7 +175,14 @@ class AudioHandler:
     def stop(self):
         """Stop current playback"""
         pygame.mixer.music.stop()
-        
+
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing"""
+        try:
+            return pygame.mixer.music.get_busy()
+        except:
+            return False
+
     def record_audio(self, duration: int, filename: str) -> bool:
         """Record audio from microphone"""
         try:

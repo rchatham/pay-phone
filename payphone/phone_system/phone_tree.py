@@ -19,56 +19,73 @@ class PhoneTree:
         self.timeout = timeout
         self.audio_handler = audio_handler if audio_handler is not None else AudioHandler()
         
-    def navigate(self, 
+    def navigate(self,
                  input_queue: queue.Queue,
                  hook_status: Callable,
                  main_menu: Optional['PhoneTree'] = None) -> None:
         """Navigate through the phone tree"""
-        
+
         # Check if phone is still off hook
         if not hook_status():
             logger.info("Phone hung up")
             return
-            
-        # Play audio prompt
-        self.audio_handler.play_file(self.audio_file)
-        
+
+        # Play audio prompt (non-blocking to allow interruption)
+        self.audio_handler.play_file(self.audio_file, blocking=False)
+
         # Execute action if present
         if self.action:
+            # Wait for audio to finish for actions
+            while self.audio_handler.is_playing() and hook_status():
+                time.sleep(0.1)
+
             continue_nav = self.action()
             if not continue_nav:
                 if main_menu:
                     main_menu.navigate(input_queue, hook_status, main_menu)
                 return
-                
+
         # If no options, return to main menu
         if not self.options:
+            # Wait for audio to finish before returning to menu
+            while self.audio_handler.is_playing() and hook_status():
+                time.sleep(0.1)
+
             if main_menu:
                 time.sleep(2)
                 main_menu.navigate(input_queue, hook_status, main_menu)
             return
-            
-        # Wait for input
+
+        # Wait for input (allow interrupting audio)
         start_time = time.time()
-        
+
         while hook_status():  # Continue while phone is off hook
             if time.time() - start_time > self.timeout:
                 logger.info("Timeout reached")
+                self.audio_handler.stop()  # Stop any playing audio
                 self.audio_handler.play_file("prompts/timeout.mp3")
                 if main_menu:
                     main_menu.navigate(input_queue, hook_status, main_menu)
                 return
-                
+
             try:
-                choice = input_queue.get(timeout=0.5)
-                
+                # Check for input with short timeout for faster response
+                choice = input_queue.get(timeout=0.1)
+
+                # Button pressed - stop audio immediately
+                if self.audio_handler.is_playing():
+                    self.audio_handler.stop()
+                    logger.info(f"Audio interrupted by button press: {choice}")
+
                 if choice in self.options:
                     self.options[choice].navigate(input_queue, hook_status, main_menu)
                     return
                 else:
-                    self.audio_handler.play_file("prompts/invalid_option.mp3")
-                    self.audio_handler.play_file(self.audio_file)
+                    # Play error messages blocking to ensure user hears them
+                    self.audio_handler.play_file("prompts/invalid_option.mp3", blocking=True)
+                    self.audio_handler.play_file(self.audio_file, blocking=False)
                     start_time = time.time()  # Reset timeout
-                    
+
             except queue.Empty:
+                # No input yet - continue waiting
                 continue
