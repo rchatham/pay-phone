@@ -72,8 +72,11 @@ class PhoneTree:
                 # Check for input with short timeout for faster response
                 choice = input_queue.get(timeout=0.1)
 
+                # Check if audio was playing when button was pressed
+                audio_was_playing = self.audio_handler.is_playing()
+
                 # Button pressed - stop audio immediately
-                if self.audio_handler.is_playing():
+                if audio_was_playing:
                     self.audio_handler.stop()
                     logger.info(f"Audio interrupted by button press: {choice}")
 
@@ -81,8 +84,30 @@ class PhoneTree:
                     self.options[choice].navigate(input_queue, hook_status, main_menu)
                     return
                 else:
-                    # Play error messages blocking to ensure user hears them
-                    self.audio_handler.play_file("prompts/invalid_option.mp3", blocking=True)
+                    # Only play error message if audio was NOT playing (user pressed invalid after menu finished)
+                    if not audio_was_playing:
+                        # Play error message blocking to ensure user hears it
+                        self.audio_handler.play_file("prompts/invalid_option.mp3", blocking=True)
+
+                        # Short delay before replaying menu
+                        time.sleep(0.5)
+                    else:
+                        # Audio was interrupted - just log and replay menu (no error message)
+                        logger.info(f"Invalid option {choice} pressed during audio playback - skipping error message")
+
+                    # Clear queue to prevent queued presses
+                    cleared_count = 0
+                    while not input_queue.empty():
+                        try:
+                            input_queue.get_nowait()
+                            cleared_count += 1
+                        except queue.Empty:
+                            break
+
+                    if cleared_count > 0:
+                        logger.debug(f"Cleared {cleared_count} button presses from queue")
+
+                    # Replay menu audio
                     self.audio_handler.play_file(self.audio_file, blocking=False)
                     start_time = time.time()  # Reset timeout
 
