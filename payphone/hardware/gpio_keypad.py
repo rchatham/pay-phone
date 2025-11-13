@@ -9,11 +9,12 @@ logger = logging.getLogger(__name__)
 
 class GPIOKeypad:
     """Handle matrix keypad (3x3 or 4x3) using Raspberry Pi GPIO pins"""
-    
-    def __init__(self, row_pins: List[int], col_pins: List[int], input_queue: queue.Queue):
+
+    def __init__(self, row_pins: List[int], col_pins: List[int], input_queue: queue.Queue, audio_handler=None):
         self.row_pins = row_pins
         self.col_pins = col_pins
         self.input_queue = input_queue
+        self.audio_handler = audio_handler
         self.running = False
         
         # Keypad matrix mapping
@@ -107,6 +108,10 @@ class GPIOKeypad:
                 current_time = time.time()
                 logger.debug(f"Key detected: {key} (last={last_key}, debounce_ok={current_time - self.last_key_time > self.debounce_time})")
                 if current_time - self.last_key_time > self.debounce_time:
+                    # Play DTMF tone for button press
+                    if self.audio_handler:
+                        self.audio_handler.play_dtmf_tone(key)
+
                     self.input_queue.put(key)
                     logger.info(f"Key pressed: {key}")
                     self.last_key_time = current_time

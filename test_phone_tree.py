@@ -23,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class AudioPlayer:
-    """Simple audio player using pygame"""
+    """Simple audio player using pygame - matches AudioHandler interface"""
     def __init__(self, audio_dir="audio_files"):
         self.audio_dir = audio_dir
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
@@ -54,6 +54,39 @@ class AudioPlayer:
         """Stop current playback"""
         pygame.mixer.music.stop()
 
+    def is_playing(self) -> bool:
+        """Check if audio is currently playing"""
+        try:
+            return pygame.mixer.music.get_busy()
+        except:
+            return False
+
+    def play_dtmf_tone(self, key: str) -> bool:
+        """Play DTMF tone for a keypad button press"""
+        filename_map = {
+            '0': '0.wav', '1': '1.wav', '2': '2.wav', '3': '3.wav',
+            '4': '4.wav', '5': '5.wav', '6': '6.wav', '7': '7.wav',
+            '8': '8.wav', '9': '9.wav', '*': 'star.wav', '#': 'pound.wav',
+        }
+
+        if key not in filename_map:
+            return False
+
+        dtmf_file = os.path.join(self.audio_dir, 'dtmf', filename_map[key])
+
+        if not os.path.exists(dtmf_file):
+            logger.debug(f"DTMF tone file not found: {dtmf_file}")
+            return False
+
+        try:
+            sound = pygame.mixer.Sound(dtmf_file)
+            sound.play()
+            logger.info(f"♪ DTMF tone: {key}")
+            return True
+        except Exception as e:
+            logger.error(f"Error playing DTMF tone for {key}: {e}")
+            return False
+
 class KeyboardInput:
     """Simulate keypad input via keyboard"""
     def __init__(self):
@@ -73,6 +106,10 @@ class KeyboardInput:
                     self.running = False
                     break
                 elif key in '0123456789*#':
+                    # Play DTMF tone if audio player is available
+                    if hasattr(self, 'audio_player') and self.audio_player:
+                        self.audio_player.play_dtmf_tone(key)
+
                     self.input_queue.put(key)
                     logger.info(f"Key pressed: {key}")
                 else:
@@ -82,6 +119,10 @@ class KeyboardInput:
             except KeyboardInterrupt:
                 self.running = False
                 break
+
+    def set_audio_player(self, audio_player):
+        """Set audio player for DTMF tones"""
+        self.audio_player = audio_player
 
 def setup_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
     """Build the phone menu tree"""
@@ -126,6 +167,7 @@ def main():
     # Initialize components
     audio_player = AudioPlayer("audio_files")
     keyboard = KeyboardInput()
+    keyboard.set_audio_player(audio_player)  # Enable DTMF tones on keypress
     phone_tree = setup_phone_tree(audio_player)
 
     # Simulate dial tone

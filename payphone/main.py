@@ -115,7 +115,8 @@ class PayphoneSystem:
             self.hardware_handler = GPIOHandler(
                 keypad_rows=self.config.KEYPAD_ROW_PINS,
                 keypad_cols=self.config.KEYPAD_COL_PINS,
-                hook_pin=self.config.HOOK_SWITCH_PIN
+                hook_pin=self.config.HOOK_SWITCH_PIN,
+                audio_handler=self.audio_handler  # Pass audio handler for DTMF tones
             )
         else:
             logger.info("Using Serial mode (Arduino connection)")

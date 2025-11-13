@@ -183,6 +183,52 @@ class AudioHandler:
         except:
             return False
 
+    def play_dtmf_tone(self, key: str) -> bool:
+        """
+        Play DTMF tone for a keypad button press.
+
+        Args:
+            key: The button pressed ('0'-'9', '*', '#')
+
+        Returns:
+            True if tone played successfully, False otherwise
+        """
+        # Map keys to filenames
+        filename_map = {
+            '0': '0.wav',
+            '1': '1.wav',
+            '2': '2.wav',
+            '3': '3.wav',
+            '4': '4.wav',
+            '5': '5.wav',
+            '6': '6.wav',
+            '7': '7.wav',
+            '8': '8.wav',
+            '9': '9.wav',
+            '*': 'star.wav',
+            '#': 'pound.wav',
+        }
+
+        if key not in filename_map:
+            logger.warning(f"No DTMF tone for key: {key}")
+            return False
+
+        dtmf_file = os.path.join(self.audio_dir, 'dtmf', filename_map[key])
+
+        if not os.path.exists(dtmf_file):
+            logger.debug(f"DTMF tone file not found: {dtmf_file}")
+            return False
+
+        try:
+            # Load and play the tone using a Sound object for non-blocking playback
+            # This allows tones to overlap with music playback
+            sound = pygame.mixer.Sound(dtmf_file)
+            sound.play()
+            return True
+        except Exception as e:
+            logger.error(f"Error playing DTMF tone for {key}: {e}")
+            return False
+
     def record_audio(self, duration: int, filename: str) -> bool:
         """Record audio from microphone"""
         try:

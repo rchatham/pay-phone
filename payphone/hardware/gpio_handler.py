@@ -9,25 +9,27 @@ logger = logging.getLogger(__name__)
 
 class GPIOHandler:
     """Main GPIO handler for direct Raspberry Pi connection"""
-    
-    def __init__(self, 
+
+    def __init__(self,
                  keypad_rows: List[int],
                  keypad_cols: List[int],
-                 hook_pin: int):
+                 hook_pin: int,
+                 audio_handler=None):
         """
         Initialize GPIO handler
-        
+
         Args:
             keypad_rows: List of GPIO pins for keypad rows
             keypad_cols: List of GPIO pins for keypad columns
             hook_pin: GPIO pin for hook switch
+            audio_handler: Optional AudioHandler for DTMF tones
         """
         self.input_queue = queue.Queue()
-        
-        # Initialize components
-        self.keypad = GPIOKeypad(keypad_rows, keypad_cols, self.input_queue)
+
+        # Initialize components (pass audio_handler to keypad for DTMF tones)
+        self.keypad = GPIOKeypad(keypad_rows, keypad_cols, self.input_queue, audio_handler)
         self.hook_switch = GPIOHookSwitch(hook_pin)
-        
+
         self.running = False
         
     def connect(self) -> bool:
