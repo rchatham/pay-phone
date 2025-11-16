@@ -14,7 +14,7 @@ import time
 # Add payphone to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from payphone.phone_system.phone_tree import PhoneTree
+from payphone.core.phone_tree import PhoneTree
 
 logging.basicConfig(
     level=logging.INFO,

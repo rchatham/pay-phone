@@ -63,3 +63,6 @@ audio_files/*.mp3
 *.bak
 *.backup
 .cache/
+
+# Claude Code configuration
+.claude/

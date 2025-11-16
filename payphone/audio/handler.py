@@ -3,6 +3,7 @@ import os
 import logging
 import subprocess
 import signal
+import sys
 from typing import Optional
 import threading
 
@@ -37,24 +38,37 @@ class AudioHandler:
                             logger.info("Retrying audio initialization...")
                             continue
                         else:
-                            # Ask user interactively
-                            print("\n" + "="*60)
-                            print("AUDIO DEVICE BUSY")
-                            print("="*60)
-                            print(f"\nThe audio device is being used by another process.")
-                            print("This usually happens when a previous payphone instance didn't exit cleanly.")
+                            # Check if we're running interactively (has a TTY)
+                            is_interactive = sys.stdin.isatty()
 
-                            response = input("\nWould you like to kill the blocking process? (y/n): ").strip().lower()
-                            if response == 'y':
+                            if is_interactive:
+                                # Ask user interactively
+                                print("\n" + "="*60)
+                                print("AUDIO DEVICE BUSY")
+                                print("="*60)
+                                print(f"\nThe audio device is being used by another process.")
+                                print("This usually happens when a previous payphone instance didn't exit cleanly.")
+
+                                response = input("\nWould you like to kill the blocking process? (y/n): ").strip().lower()
+                                if response == 'y':
+                                    if self._force_cleanup_audio():
+                                        print("✓ Process killed. Retrying audio initialization...")
+                                        continue
+                                    else:
+                                        print("✗ Failed to kill blocking process")
+                                else:
+                                    print("Exiting. Please manually kill the blocking process and try again.")
+                                    print("Hint: Run 'pkill -9 python3' to kill all Python processes")
+                                    raise
+                            else:
+                                # Non-interactive mode (systemd service, etc.) - automatically force cleanup
+                                logger.info("Non-interactive mode detected - automatically attempting force cleanup")
                                 if self._force_cleanup_audio():
-                                    print("✓ Process killed. Retrying audio initialization...")
+                                    logger.info("Force cleanup succeeded. Retrying audio initialization...")
                                     continue
                                 else:
-                                    print("✗ Failed to kill blocking process")
-                            else:
-                                print("Exiting. Please manually kill the blocking process and try again.")
-                                print("Hint: Run 'pkill -9 python3' to kill all Python processes")
-                                raise
+                                    logger.error("Force cleanup failed. Audio device remains busy.")
+                                    # Don't raise - continue to next retry attempt
                     else:
                         logger.error(f"Failed to initialize audio after {max_retries} attempts")
                         raise

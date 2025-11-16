@@ -1,4 +1,3 @@
-import serial
 import threading
 import queue
 import logging
@@ -6,8 +5,23 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
+# Conditional import for pyserial (only available when installed)
+try:
+    import serial
+    _SERIAL_AVAILABLE = True
+except ImportError:
+    _SERIAL_AVAILABLE = False
+    serial = None
+    logger.debug("pyserial not available - Serial functionality disabled")
+
 class SerialHandler:
     def __init__(self, port: str = '/dev/ttyUSB0', baudrate: int = 9600):
+        if not _SERIAL_AVAILABLE:
+            raise RuntimeError(
+                "pyserial is not available. Serial functionality requires installing pyserial. "
+                "Install with: pip install pyserial"
+            )
+
         self.port = port
         self.baudrate = baudrate
         self.serial: Optional[serial.Serial] = None
