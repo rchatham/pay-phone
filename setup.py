@@ -22,6 +22,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
+    package_data={
+        'payphone': ['audio_files/dtmf/*.wav'],
+    },
+    include_package_data=True,
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",

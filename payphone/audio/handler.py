@@ -6,6 +6,11 @@ import signal
 import sys
 from typing import Optional
 import threading
+try:
+    from importlib import resources
+except ImportError:
+    # Python < 3.7
+    import importlib_resources as resources
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +206,10 @@ class AudioHandler:
         """
         Play DTMF tone for a keypad button press.
 
+        Tries to find DTMF files in this order:
+        1. User-provided audio_dir/dtmf/ (for custom tones)
+        2. Bundled package resources (fallback)
+
         Args:
             key: The button pressed ('0'-'9', '*', '#')
 
@@ -227,21 +236,45 @@ class AudioHandler:
             logger.warning(f"No DTMF tone for key: {key}")
             return False
 
+        # Try user-provided DTMF file first
         dtmf_file = os.path.join(self.audio_dir, 'dtmf', filename_map[key])
 
-        if not os.path.exists(dtmf_file):
-            logger.debug(f"DTMF tone file not found: {dtmf_file}")
+        if os.path.exists(dtmf_file):
+            try:
+                sound = pygame.mixer.Sound(dtmf_file)
+                sound.play()
+                return True
+            except Exception as e:
+                logger.error(f"Error playing DTMF tone from {dtmf_file}: {e}")
+                # Fall through to try bundled resource
+
+        # Fall back to bundled DTMF files
+        try:
+            # Python 3.9+ uses importlib.resources.files()
+            if hasattr(resources, 'files'):
+                dtmf_path = resources.files('payphone').joinpath('audio_files', 'dtmf', filename_map[key])
+                if hasattr(dtmf_path, 'read_bytes'):
+                    # Load sound from bytes
+                    import io
+                    sound_bytes = dtmf_path.read_bytes()
+                    sound_file = io.BytesIO(sound_bytes)
+                    sound = pygame.mixer.Sound(sound_file)
+                    sound.play()
+                    logger.debug(f"Playing bundled DTMF tone for {key}")
+                    return True
+            else:
+                # Python 3.7-3.8 fallback
+                with resources.path('payphone.audio_files.dtmf', filename_map[key]) as dtmf_resource:
+                    sound = pygame.mixer.Sound(str(dtmf_resource))
+                    sound.play()
+                    logger.debug(f"Playing bundled DTMF tone for {key}")
+                    return True
+        except Exception as e:
+            logger.debug(f"Bundled DTMF tone not available for {key}: {e}")
             return False
 
-        try:
-            # Load and play the tone using a Sound object for non-blocking playback
-            # This allows tones to overlap with music playback
-            sound = pygame.mixer.Sound(dtmf_file)
-            sound.play()
-            return True
-        except Exception as e:
-            logger.error(f"Error playing DTMF tone for {key}: {e}")
-            return False
+        logger.debug(f"No DTMF tone available for key: {key}")
+        return False
 
     def record_audio(self, duration: int, filename: str) -> bool:
         """Record audio from microphone"""
