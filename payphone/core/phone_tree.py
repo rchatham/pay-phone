@@ -12,13 +12,141 @@ class PhoneTree:
                  options: Optional[Dict[str, 'PhoneTree']] = None,
                  action: Optional[Callable] = None,
                  timeout: int = 30,
-                 audio_handler=None):
+                 audio_handler=None,
+                 extension_mode: bool = False,
+                 extension_length: Optional[int] = None,
+                 extension_terminator: str = '#',
+                 extension_timeout: float = 3.0):
+        """
+        Initialize a PhoneTree node.
+
+        Args:
+            audio_file: Path to audio file to play for this menu
+            options: Dictionary mapping keys to child PhoneTree nodes
+            action: Optional callback function to execute
+            timeout: Overall timeout in seconds before returning to main menu
+            audio_handler: AudioHandler instance (created if not provided)
+            extension_mode: Enable multi-digit extension dialing
+            extension_length: Fixed length for extensions (e.g., 3 for "101")
+                             If None, uses terminator to end input
+            extension_terminator: Key to end variable-length extension input (default '#')
+            extension_timeout: Seconds of inactivity before auto-submitting extension
+        """
         self.audio_file = audio_file
         self.options = options or {}
         self.action = action
         self.timeout = timeout
         self.audio_handler = audio_handler if audio_handler is not None else AudioHandler()
-        
+        self.extension_mode = extension_mode
+        self.extension_length = extension_length
+        self.extension_terminator = extension_terminator
+        self.extension_timeout = extension_timeout
+
+        # Validate extension mode configuration
+        if self.extension_mode and self.options:
+            self._validate_extension_options()
+
+    def _validate_extension_options(self) -> None:
+        """
+        Validate that extension mode configuration is correct.
+
+        Raises:
+            ValueError: If options violate extension mode constraints
+        """
+        if not self.options:
+            return
+
+        # Check all option keys
+        key_lengths = set(len(key) for key in self.options.keys())
+
+        # Disallow mixing single-digit and multi-digit options
+        if len(key_lengths) > 1 and 1 in key_lengths:
+            single_digit_keys = [k for k in self.options.keys() if len(k) == 1]
+            multi_digit_keys = [k for k in self.options.keys() if len(k) > 1]
+            raise ValueError(
+                f"Cannot mix single-digit and multi-digit options in extension mode. "
+                f"Single-digit keys: {single_digit_keys}, "
+                f"Multi-digit keys: {multi_digit_keys}. "
+                f"Use separate menus for each type."
+            )
+
+        # If extension_length is specified, validate all keys match
+        if self.extension_length:
+            invalid_keys = [k for k in self.options.keys() if len(k) != self.extension_length]
+            if invalid_keys:
+                raise ValueError(
+                    f"All option keys must be {self.extension_length} digits long when "
+                    f"extension_length is specified. Invalid keys: {invalid_keys}"
+                )
+
+        # Validate that extension_terminator is not used in option keys
+        if self.extension_terminator:
+            invalid_keys = [k for k in self.options.keys() if self.extension_terminator in k]
+            if invalid_keys:
+                raise ValueError(
+                    f"Extension terminator '{self.extension_terminator}' cannot appear in "
+                    f"option keys. Invalid keys: {invalid_keys}"
+                )
+
+        logger.info(f"Extension mode validated: {len(self.options)} options, "
+                   f"lengths={key_lengths}, terminator='{self.extension_terminator}'")
+
+    def _collect_extension(self,
+                          input_queue: queue.Queue,
+                          hook_status: Callable) -> Optional[str]:
+        """
+        Collect multi-digit extension input.
+
+        Args:
+            input_queue: Queue containing keypad input
+            hook_status: Function to check if phone is off hook
+
+        Returns:
+            str: The collected extension, or None if timeout/hang-up/empty
+        """
+        buffer = []
+        last_input_time = time.time()
+
+        logger.info(f"Collecting extension (length={self.extension_length}, "
+                   f"terminator='{self.extension_terminator}', "
+                   f"timeout={self.extension_timeout}s)")
+
+        while hook_status():
+            # Check for timeout since last input
+            if buffer and time.time() - last_input_time > self.extension_timeout:
+                extension = ''.join(buffer)
+                logger.info(f"Extension timeout - auto-submitting: {extension}")
+                return extension
+
+            try:
+                digit = input_queue.get(timeout=0.1)
+
+                # Check for terminator
+                if digit == self.extension_terminator:
+                    extension = ''.join(buffer)
+                    logger.info(f"Extension terminated with '{self.extension_terminator}': {extension}")
+                    return extension if extension else None
+
+                # Validate digit (allow 0-9, *, but not the terminator)
+                if digit in '0123456789*':
+                    buffer.append(digit)
+                    last_input_time = time.time()
+                    logger.debug(f"Extension buffer: {''.join(buffer)}")
+
+                    # Check if we've reached fixed length
+                    if self.extension_length and len(buffer) >= self.extension_length:
+                        extension = ''.join(buffer)
+                        logger.info(f"Extension complete (fixed length {self.extension_length}): {extension}")
+                        return extension
+                else:
+                    logger.warning(f"Invalid digit in extension: {digit}")
+
+            except queue.Empty:
+                continue
+
+        logger.info("Phone hung up during extension collection")
+        return None
+
     def navigate(self,
                  input_queue: queue.Queue,
                  hook_status: Callable,
@@ -59,6 +187,18 @@ class PhoneTree:
         # Wait for input (allow interrupting audio)
         start_time = time.time()
 
+        # Branch based on extension mode
+        if self.extension_mode:
+            self._navigate_extension_mode(input_queue, hook_status, main_menu, start_time)
+        else:
+            self._navigate_single_digit_mode(input_queue, hook_status, main_menu, start_time)
+
+    def _navigate_single_digit_mode(self,
+                                    input_queue: queue.Queue,
+                                    hook_status: Callable,
+                                    main_menu: Optional['PhoneTree'],
+                                    start_time: float) -> None:
+        """Handle navigation in single-digit mode (original behavior)."""
         while hook_status():  # Continue while phone is off hook
             if time.time() - start_time > self.timeout:
                 logger.info("Timeout reached")
@@ -114,3 +254,68 @@ class PhoneTree:
             except queue.Empty:
                 # No input yet - continue waiting
                 continue
+
+    def _navigate_extension_mode(self,
+                                 input_queue: queue.Queue,
+                                 hook_status: Callable,
+                                 main_menu: Optional['PhoneTree'],
+                                 start_time: float) -> None:
+        """Handle navigation in extension mode (multi-digit input)."""
+        while hook_status():
+            # Overall timeout check
+            if time.time() - start_time > self.timeout:
+                logger.info("Overall timeout reached in extension mode")
+                self.audio_handler.stop()
+                self.audio_handler.play_file("prompts/timeout.mp3")
+                if main_menu:
+                    main_menu.navigate(input_queue, hook_status, main_menu)
+                return
+
+            # Stop audio on first keypress to allow silent extension entry
+            if self.audio_handler.is_playing():
+                # Wait briefly for first digit
+                try:
+                    first_digit = input_queue.get(timeout=0.1)
+                    self.audio_handler.stop()
+                    logger.info("Audio stopped - beginning extension collection")
+                    # Put the digit back for _collect_extension to process
+                    input_queue.put(first_digit)
+                except queue.Empty:
+                    continue
+
+            # Collect extension
+            extension = self._collect_extension(input_queue, hook_status)
+
+            if not extension:
+                # Empty input - replay prompt
+                logger.info("No extension collected, replaying menu")
+                self.audio_handler.play_file(self.audio_file, blocking=False)
+                start_time = time.time()
+                continue
+
+            # Check if extension matches an option
+            if extension in self.options:
+                logger.info(f"Extension matched: {extension}")
+                self.options[extension].navigate(input_queue, hook_status, main_menu)
+                return
+            else:
+                # Invalid extension
+                logger.info(f"Invalid extension: {extension}")
+                self.audio_handler.play_file("prompts/invalid_extension.mp3", blocking=True)
+                time.sleep(0.5)
+
+                # Clear queue
+                cleared_count = 0
+                while not input_queue.empty():
+                    try:
+                        input_queue.get_nowait()
+                        cleared_count += 1
+                    except queue.Empty:
+                        break
+
+                if cleared_count > 0:
+                    logger.debug(f"Cleared {cleared_count} keypresses from queue")
+
+                # Replay menu
+                self.audio_handler.play_file(self.audio_file, blocking=False)
+                start_time = time.time()
