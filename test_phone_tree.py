@@ -153,13 +153,101 @@ def setup_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     return main_menu
 
+def setup_extension_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
+    """Build an extension-based phone tree for testing multi-digit dialing"""
+
+    # Create employee directory with 3-digit extensions
+    alice = PhoneTree("directory/alice.mp3", audio_handler=audio_player)
+    bob = PhoneTree("directory/bob.mp3", audio_handler=audio_player)
+    charlie = PhoneTree("directory/charlie.mp3", audio_handler=audio_player)
+    diana = PhoneTree("directory/diana.mp3", audio_handler=audio_player)
+
+    # Directory menu with fixed-length 3-digit extensions
+    directory = PhoneTree(
+        "menu/directory.mp3",
+        audio_handler=audio_player,
+        extension_mode=True,
+        extension_length=3,
+        extension_terminator='#',
+        extension_timeout=3.0,
+        options={
+            "101": alice,
+            "102": bob,
+            "103": charlie,
+            "104": diana,
+        }
+    )
+
+    # Department menus with variable-length extensions (terminated by #)
+    sales_dept = PhoneTree("departments/sales.mp3", audio_handler=audio_player)
+    support_dept = PhoneTree("departments/support.mp3", audio_handler=audio_player)
+    engineering_dept = PhoneTree("departments/engineering.mp3", audio_handler=audio_player)
+
+    departments = PhoneTree(
+        "menu/departments.mp3",
+        audio_handler=audio_player,
+        extension_mode=True,
+        extension_terminator='#',
+        extension_timeout=3.0,
+        options={
+            "10": sales_dept,
+            "20": support_dept,
+            "30": engineering_dept,
+        }
+    )
+
+    # Main menu with regular single-digit options
+    main_menu = PhoneTree(
+        "menu/main_menu_ext.mp3",
+        audio_handler=audio_player,
+        options={
+            "1": directory,
+            "2": departments,
+            "3": PhoneTree("menu/info.mp3", audio_handler=audio_player),
+        }
+    )
+
+    return main_menu
+
 def main():
     """Run the phone tree simulator"""
     print("\n" + "="*60)
     print("PAYPHONE SIMULATOR - Local Testing Mode")
     print("="*60)
+    print("\nSelect test mode:")
+    print("  1. Regular phone tree (single-digit options)")
+    print("  2. Extension phone tree (multi-digit extensions)")
+    print("="*60)
+
+    # Get mode selection
+    mode = input("\nEnter mode (1 or 2, default=1): ").strip()
+    use_extensions = (mode == "2")
+
+    print("\n" + "="*60)
+    if use_extensions:
+        print("EXTENSION MODE - Multi-digit Dialing Test")
+        print("="*60)
+        print("\nTest scenarios:")
+        print("  1. Press '1' for Employee Directory (3-digit extensions)")
+        print("     - Dial '101' for Alice (auto-submits after 3 digits)")
+        print("     - Dial '102' for Bob")
+        print("     - Dial '103' for Charlie")
+        print("     - Dial '104' for Diana")
+        print("\n  2. Press '2' for Departments (variable-length)")
+        print("     - Dial '10#' for Sales (# terminates)")
+        print("     - Dial '20#' for Support")
+        print("     - Dial '30#' for Engineering")
+        print("\n  3. Press '3' for Information (regular single-digit)")
+    else:
+        print("REGULAR MODE - Single-digit Options")
+        print("="*60)
+        print("\nMenu options:")
+        print("  1. Information menu")
+        print("  2. Jokes")
+        print("  3. Music")
+
     print("\nInstructions:")
-    print("  - Type a number (0-9) and press Enter to simulate keypad")
+    print("  - Type keys (0-9, *, #) and press Enter to simulate keypad")
     print("  - Type 'q' to quit")
     print("  - Audio files will play if they exist")
     print("="*60 + "\n")
@@ -168,7 +256,12 @@ def main():
     audio_player = AudioPlayer("audio_files")
     keyboard = KeyboardInput()
     keyboard.set_audio_player(audio_player)  # Enable DTMF tones on keypress
-    phone_tree = setup_phone_tree(audio_player)
+
+    # Setup phone tree based on mode
+    if use_extensions:
+        phone_tree = setup_extension_phone_tree(audio_player)
+    else:
+        phone_tree = setup_phone_tree(audio_player)
 
     # Simulate dial tone
     logger.info("Phone picked up - playing dial tone")
