@@ -70,6 +70,96 @@ AUDIO_FILES = {
         Imagine your favorite hold music here.
         Returning to main menu.""",
         "voice": "fable"
+    },
+
+    # Extension mode prompts
+    "prompts/invalid_extension.mp3": {
+        "text": "I'm sorry, that extension is not valid. Please try again.",
+        "voice": "alloy"
+    },
+
+    # Extension mode main menu
+    "menu/main_menu_ext.mp3": {
+        "text": """Welcome to the company directory.
+        Press 1 for the employee directory.
+        Press 2 for departments.
+        Press 3 for general information.""",
+        "voice": "nova"
+    },
+
+    # Directory menu
+    "menu/directory.mp3": {
+        "text": """Employee directory. Please dial the three-digit extension of the person you wish to reach.
+        Extension 101 for Alice, 102 for Bob, 103 for Charlie, or 104 for Diana.""",
+        "voice": "nova"
+    },
+
+    # Departments menu
+    "menu/departments.mp3": {
+        "text": """Department directory. Dial 10 for Sales, 20 for Support, or 30 for Engineering. Press pound when finished.""",
+        "voice": "nova"
+    },
+
+    # General info
+    "menu/info.mp3": {
+        "text": """Company information. Our office hours are Monday through Friday, 9 AM to 5 PM Pacific Time.
+        For technical support, please press 2 from the main menu and dial extension 20.
+        Returning to main menu.""",
+        "voice": "shimmer"
+    },
+
+    # Directory entries (employees)
+    "directory/alice.mp3": {
+        "text": """You have reached Alice Smith in Marketing.
+        I'm currently away from my desk. Please leave a message after the tone, or press pound to return to the directory.
+        Returning to main menu.""",
+        "voice": "shimmer"
+    },
+
+    "directory/bob.mp3": {
+        "text": """You have reached Bob Johnson in Engineering.
+        I'm not available right now. Please leave your name and number, and I'll get back to you as soon as possible.
+        Returning to main menu.""",
+        "voice": "onyx"
+    },
+
+    "directory/charlie.mp3": {
+        "text": """You have reached Charlie Davis in Sales.
+        Thank you for calling! I'm either on another call or away from my desk. Please leave a detailed message and I'll return your call.
+        Returning to main menu.""",
+        "voice": "echo"
+    },
+
+    "directory/diana.mp3": {
+        "text": """You have reached Diana Martinez in Human Resources.
+        I'm currently unavailable. If this is regarding employment verification, please press 0 to reach the main desk. Otherwise, please leave a message.
+        Returning to main menu.""",
+        "voice": "nova"
+    },
+
+    # Department messages
+    "departments/sales.mp3": {
+        "text": """You have reached the Sales department.
+        Our sales team is available Monday through Friday, 9 AM to 6 PM.
+        For immediate assistance, please call our main line. For all other inquiries, please leave a message.
+        Returning to main menu.""",
+        "voice": "echo"
+    },
+
+    "departments/support.mp3": {
+        "text": """You have reached Technical Support.
+        For 24/7 support, please visit our website or use our chat system.
+        For non-urgent matters, please leave a detailed message including your contact information and a description of your issue.
+        Returning to main menu.""",
+        "voice": "onyx"
+    },
+
+    "departments/engineering.mp3": {
+        "text": """You have reached the Engineering department.
+        For technical inquiries, please email engineering@company.com.
+        For urgent production issues, please contact the on-call engineer through the main desk.
+        Returning to main menu.""",
+        "voice": "onyx"
     }
 }
 
@@ -125,10 +215,16 @@ def main():
     print(f"Files saved to: {audio_dir.absolute()}")
     print("\nAvailable voices used:")
     print("  - alloy (prompts)")
-    print("  - nova (menus)")
-    print("  - shimmer (info)")
-    print("  - echo (jokes)")
+    print("  - nova (menus, Diana)")
+    print("  - shimmer (info, Alice)")
+    print("  - echo (jokes, Charlie, Sales)")
+    print("  - onyx (Bob, Support, Engineering)")
     print("  - fable (music)")
+    print("\nExtension mode files generated:")
+    print("  - prompts/invalid_extension.mp3")
+    print("  - menu/main_menu_ext.mp3, directory.mp3, departments.mp3, info.mp3")
+    print("  - directory/alice.mp3, bob.mp3, charlie.mp3, diana.mp3")
+    print("  - departments/sales.mp3, support.mp3, engineering.mp3")
 
 if __name__ == "__main__":
     main()
