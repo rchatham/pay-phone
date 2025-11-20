@@ -93,22 +93,38 @@ def _kill_existing_instances():
     except Exception as e:
         logger.warning(f"Failed to check for existing instances: {e}")
 
-# Import the phone system we want to use
-# This can be changed to any other phone system implementation
+# Import the BIOS bootloader system
+# This will handle launching other phone systems
 try:
-    from phone_systems import InformationBoothSystem as PhoneSystem
+    from payphone.bios import BIOSBootloader as PhoneSystem
 except ImportError:
-    # Fallback to local import if not installed as package
-    import sys
+    # Fallback to direct import
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-    from phone_systems import InformationBoothSystem as PhoneSystem
-        
+    from payphone.bios import BIOSBootloader as PhoneSystem
+
+# Legacy mode: Allow direct system launch via environment variable
+# Set PAYPHONE_LEGACY_MODE=information_booth to bypass BIOS
+legacy_mode = os.environ.get('PAYPHONE_LEGACY_MODE')
+
+if legacy_mode:
+    logger.info(f"Legacy mode enabled: {legacy_mode}")
+    try:
+        from phone_systems import InformationBoothSystem as LegacyPhoneSystem
+    except ImportError:
+        sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+        from phone_systems import InformationBoothSystem as LegacyPhoneSystem
+
 def main():
     # Kill any existing payphone instances before starting
     _kill_existing_instances()
 
     # Create and run the phone system
-    system = PhoneSystem()
+    if legacy_mode:
+        logger.info("Running in legacy mode (bypassing BIOS)")
+        system = LegacyPhoneSystem()
+    else:
+        logger.info("Running with BIOS bootloader")
+        system = PhoneSystem()
 
     # Setup signal handlers with logging
     def signal_handler(signum, frame):
