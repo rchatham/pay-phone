@@ -24,13 +24,19 @@ logger = logging.getLogger(__name__)
 
 class AudioPlayer:
     """Simple audio player using pygame - matches AudioHandler interface"""
-    def __init__(self, audio_dir="audio_files"):
+    def __init__(self, audio_dir="audio_files", silent=False):
         self.audio_dir = audio_dir
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
-        logger.info(f"Audio initialized with directory: {audio_dir}")
+        self.silent = silent
+        if not silent:
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        logger.info(f"Audio initialized with directory: {audio_dir} (silent={silent})")
 
     def play_file(self, filename, blocking=True):
         """Play an audio file"""
+        if self.silent:
+            logger.info(f"[SILENT MODE] Would play: {filename}")
+            return True
+
         filepath = os.path.join(self.audio_dir, filename)
         if not os.path.exists(filepath):
             logger.warning(f"Audio file not found: {filepath}")
@@ -52,10 +58,13 @@ class AudioPlayer:
 
     def stop(self):
         """Stop current playback"""
-        pygame.mixer.music.stop()
+        if not self.silent:
+            pygame.mixer.music.stop()
 
     def is_playing(self) -> bool:
         """Check if audio is currently playing"""
+        if self.silent:
+            return False
         try:
             return pygame.mixer.music.get_busy()
         except:
@@ -63,6 +72,9 @@ class AudioPlayer:
 
     def play_dtmf_tone(self, key: str) -> bool:
         """Play DTMF tone for a keypad button press"""
+        if self.silent:
+            return True
+
         filename_map = {
             '0': '0.wav', '1': '1.wav', '2': '2.wav', '3': '3.wav',
             '4': '4.wav', '5': '5.wav', '6': '6.wav', '7': '7.wav',
@@ -209,6 +221,43 @@ def setup_extension_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     return main_menu
 
+def setup_hybrid_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
+    """Build a hybrid phone tree for testing prefix-based extension dialing"""
+
+    # Single-digit leaf nodes
+    info = PhoneTree("menu/info.mp3", audio_handler=audio_player)
+    help_node = PhoneTree("menu/jokes.mp3", audio_handler=audio_player)  # Reuse jokes as help
+
+    # Extension leaf nodes (employees)
+    alice = PhoneTree("directory/alice.mp3", audio_handler=audio_player)
+    bob = PhoneTree("directory/bob.mp3", audio_handler=audio_player)
+    charlie = PhoneTree("directory/charlie.mp3", audio_handler=audio_player)
+    diana = PhoneTree("directory/diana.mp3", audio_handler=audio_player)
+
+    # Hybrid main menu: single-digit options + extensions via * prefix
+    main_menu = PhoneTree(
+        "menu/main_menu_ext.mp3",
+        audio_handler=audio_player,
+        hybrid_mode=True,
+        extension_prefix='*',
+        return_to_menu_key='0',
+        extension_length=3,
+        extension_timeout=3.0,
+        allow_continuous_dialing=True,
+        options={
+            # Single-digit options (no prefix needed)
+            "1": info,
+            "2": help_node,
+            # Extensions (require * prefix)
+            "101": alice,
+            "102": bob,
+            "103": charlie,
+            "104": diana,
+        }
+    )
+
+    return main_menu
+
 def main():
     """Run the phone tree simulator"""
     print("\n" + "="*60)
@@ -217,14 +266,33 @@ def main():
     print("\nSelect test mode:")
     print("  1. Regular phone tree (single-digit options)")
     print("  2. Extension phone tree (multi-digit extensions)")
+    print("  3. Hybrid mode (single-digit + * prefix extensions)")
     print("="*60)
 
     # Get mode selection
-    mode = input("\nEnter mode (1 or 2, default=1): ").strip()
+    mode = input("\nEnter mode (1, 2, or 3, default=1): ").strip()
     use_extensions = (mode == "2")
+    use_hybrid = (mode == "3")
 
     print("\n" + "="*60)
-    if use_extensions:
+    if use_hybrid:
+        print("HYBRID MODE - Single-Digit + * Prefix Extensions")
+        print("="*60)
+        print("\nTest scenarios:")
+        print("  SINGLE-DIGIT OPTIONS (press directly):")
+        print("     - Press '1' for Information")
+        print("     - Press '2' for Help/Jokes")
+        print("\n  EXTENSIONS (press * then 3-digit number):")
+        print("     - Press '*101' for Alice")
+        print("     - Press '*102' for Bob")
+        print("     - Press '*103' for Charlie")
+        print("     - Press '*104' for Diana")
+        print("\n  CONTINUOUS DIALING:")
+        print("     - While extension plays, dial another extension")
+        print("     - e.g., While Alice plays, dial '102' to hear Bob")
+        print("\n  RETURN TO MENU:")
+        print("     - Press '0' at any time to return to main menu")
+    elif use_extensions:
         print("EXTENSION MODE - Multi-digit Dialing Test")
         print("="*60)
         print("\nTest scenarios:")
@@ -252,13 +320,19 @@ def main():
     print("  - Audio files will play if they exist")
     print("="*60 + "\n")
 
+    # Ask about silent mode
+    silent_input = input("Run in silent mode (no audio)? (y/N): ").strip().lower()
+    silent_mode = (silent_input == 'y')
+
     # Initialize components
-    audio_player = AudioPlayer("audio_files")
+    audio_player = AudioPlayer("audio_files", silent=silent_mode)
     keyboard = KeyboardInput()
     keyboard.set_audio_player(audio_player)  # Enable DTMF tones on keypress
 
     # Setup phone tree based on mode
-    if use_extensions:
+    if use_hybrid:
+        phone_tree = setup_hybrid_phone_tree(audio_player)
+    elif use_extensions:
         phone_tree = setup_extension_phone_tree(audio_player)
     else:
         phone_tree = setup_phone_tree(audio_player)
