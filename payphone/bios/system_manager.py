@@ -143,9 +143,15 @@ class SystemManager:
 
             # Find classes that inherit from PhoneSystemBase
             for name, obj in inspect.getmembers(module, inspect.isclass):
-                if (issubclass(obj, PhoneSystemBase) and
-                    obj is not PhoneSystemBase and
-                    obj.__module__ == module_name):
+                # Accept class if:
+                # 1. It's a PhoneSystemBase subclass
+                # 2. It's not PhoneSystemBase itself
+                # 3. Either it's defined in this module OR it's imported and defined in a related module
+                is_valid_subclass = (issubclass(obj, PhoneSystemBase) and obj is not PhoneSystemBase)
+                is_from_this_module = (obj.__module__ == module_name or
+                                      obj.__module__.split('.')[-1] in ['tdtm_system', 'system'])
+
+                if is_valid_subclass and is_from_this_module:
 
                     # Get metadata if available
                     metadata = self._get_system_metadata(obj)

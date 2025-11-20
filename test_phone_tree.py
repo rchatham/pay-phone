@@ -258,6 +258,41 @@ def setup_hybrid_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     return main_menu
 
+def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
+    """Build a BIOS-style system selection menu"""
+    from payphone.bios.system_manager import SystemManager
+
+    # Discover systems
+    manager = SystemManager(scan_paths=["./phone_systems", "../TDTM"])
+    systems = manager.discover_systems()
+
+    logger.info(f"Discovered {len(systems)} systems for BIOS menu")
+
+    # Build menu options
+    menu_options = {}
+    for idx, (system_id, system_info) in enumerate(systems.items(), start=1):
+        if idx > 9:
+            break
+
+        # Create leaf node for each system
+        digit = str(idx)
+        menu_options[digit] = PhoneTree(
+            f"bios/system_{system_id}.mp3",
+            audio_handler=audio_player
+        )
+
+        logger.info(f"  {digit}: {system_info.name}")
+
+    # Main BIOS menu
+    bios_menu = PhoneTree(
+        "bios/main_menu.mp3",
+        audio_handler=audio_player,
+        options=menu_options,
+        timeout=60
+    )
+
+    return bios_menu
+
 def main():
     """Run the phone tree simulator"""
     print("\n" + "="*60)
@@ -267,15 +302,26 @@ def main():
     print("  1. Regular phone tree (single-digit options)")
     print("  2. Extension phone tree (multi-digit extensions)")
     print("  3. Hybrid mode (single-digit + * prefix extensions)")
+    print("  4. BIOS mode (system selection menu)")
     print("="*60)
 
     # Get mode selection
-    mode = input("\nEnter mode (1, 2, or 3, default=1): ").strip()
+    mode = input("\nEnter mode (1, 2, 3, or 4, default=1): ").strip()
     use_extensions = (mode == "2")
     use_hybrid = (mode == "3")
+    use_bios = (mode == "4")
 
     print("\n" + "="*60)
-    if use_hybrid:
+    if use_bios:
+        print("BIOS MODE - System Selection Menu")
+        print("="*60)
+        print("\nTest scenarios:")
+        print("  SYSTEM SELECTION:")
+        print("     - Press '1' for Information Booth System")
+        print("     - Press '2' for TDTM System")
+        print("\n  Note: This is a simulated BIOS menu.")
+        print("  On real hardware, hold hook for 3s to enter BIOS.")
+    elif use_hybrid:
         print("HYBRID MODE - Single-Digit + * Prefix Extensions")
         print("="*60)
         print("\nTest scenarios:")
@@ -330,7 +376,9 @@ def main():
     keyboard.set_audio_player(audio_player)  # Enable DTMF tones on keypress
 
     # Setup phone tree based on mode
-    if use_hybrid:
+    if use_bios:
+        phone_tree = setup_bios_phone_tree(audio_player)
+    elif use_hybrid:
         phone_tree = setup_hybrid_phone_tree(audio_player)
     elif use_extensions:
         phone_tree = setup_extension_phone_tree(audio_player)
