@@ -258,6 +258,52 @@ def setup_hybrid_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     return main_menu
 
+def navigate_bios_menu(bios_menu: PhoneTree, input_queue, hook_check):
+    """
+    Custom BIOS navigation that properly handles system launching.
+
+    When a system is selected, it runs with ITSELF as the main menu,
+    not the BIOS menu. This means navigation within the system returns
+    to that system's menu, not to BIOS.
+    """
+    while hook_check():
+        # Play BIOS menu
+        bios_menu.audio_handler.play_file(bios_menu.audio_file, blocking=False)
+
+        # Wait for system selection
+        start_time = time.time()
+        while hook_check():
+            # Check timeout
+            if time.time() - start_time > bios_menu.timeout:
+                logger.info("BIOS menu timeout")
+                return
+
+            # Check for input
+            try:
+                digit = input_queue.get(timeout=0.1)
+
+                if digit in bios_menu.options:
+                    # Stop BIOS menu audio
+                    bios_menu.audio_handler.stop()
+
+                    # Get the selected system tree
+                    system_tree = bios_menu.options[digit]
+
+                    logger.info(f"BIOS: Launching system from option '{digit}'")
+
+                    # Navigate to the system with ITSELF as main_menu
+                    # This is the key: system_tree is both the current node AND the main menu
+                    system_tree.navigate(input_queue, hook_check, system_tree)
+
+                    # When system navigation completes, return to BIOS menu
+                    logger.info("System ended, returning to BIOS menu")
+                    break  # Break inner loop to replay BIOS menu
+                else:
+                    logger.warning(f"Invalid BIOS option: {digit}")
+
+            except queue.Empty:
+                continue
+
 def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
     """Build a BIOS-style system selection menu"""
     from payphone.bios.system_manager import SystemManager
@@ -289,23 +335,25 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
             # For the simulator, we need to handle hardware init failures gracefully
             # Try to instantiate, but if it fails due to audio/hardware, create a mock
 
+            # Load the system's phone tree
+            system_tree = None
+
             # Special handling for known systems that we can mock
             if system_id == "information_booth":
                 # Use the built-in phone tree setup for information booth
-                menu_options[digit] = setup_phone_tree(audio_player)
+                system_tree = setup_phone_tree(audio_player)
                 logger.info(f"    Loaded phone tree for {system_info.name} (using local setup)")
 
             elif system_id == "TDTM":
                 # TDTM requires special handling - create a simple placeholder
                 # In a real deployment, this would work fine
-                tdtm_placeholder = PhoneTree(
+                system_tree = PhoneTree(
                     "bios/system_TDTM.mp3",
                     audio_handler=audio_player,
                     options={
                         "1": PhoneTree("", audio_handler=audio_player)
                     }
                 )
-                menu_options[digit] = tdtm_placeholder
                 logger.warning(f"    Using placeholder for {system_info.name} (hardware init not available in simulator)")
 
             else:
@@ -313,9 +361,32 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
                 config = Config()
                 system_instance = system_class(config)
                 system_instance.audio_handler = audio_player
-                system_phone_tree = system_instance.setup_phone_tree()
-                menu_options[digit] = system_phone_tree
+                system_tree = system_instance.setup_phone_tree()
                 logger.info(f"    Loaded phone tree for {system_info.name}")
+
+            # Create a launcher node that navigates to the system with ITSELF as main_menu
+            # This ensures when leaf nodes finish, they return to the SYSTEM's menu, not BIOS
+            def create_launcher(tree):
+                def launch():
+                    """Launch system with its own navigation loop"""
+                    import queue as q
+                    # This function will be called as an action
+                    # We need to manually navigate to the system tree here
+                    # But we can't access input_queue and hook_status from here...
+                    # Better approach: return False to stop, then handle in navigate()
+                    return False  # Stop current navigation
+                return launch
+
+            # Instead, create a wrapper PhoneTree that has the system as its only option
+            # And use an empty audio file so it transitions immediately
+            system_launcher = PhoneTree(
+                "",  # No audio - immediate transition
+                audio_handler=audio_player,
+                action=None
+            )
+            # Directly assign the system tree with proper main_menu reference
+            # We'll handle this in the navigation logic below
+            menu_options[digit] = system_tree
 
         except Exception as e:
             logger.warning(f"Could not load system {system_id} in simulator: {e}")
@@ -444,11 +515,20 @@ def main():
 
     try:
         # Navigate the tree
-        phone_tree.navigate(
-            keyboard.input_queue,
-            lambda: keyboard.running,  # Check if still running
-            phone_tree  # Root menu to return to
-        )
+        if use_bios:
+            # Use custom BIOS navigation that properly handles system launching
+            navigate_bios_menu(
+                phone_tree,
+                keyboard.input_queue,
+                lambda: keyboard.running
+            )
+        else:
+            # Standard navigation
+            phone_tree.navigate(
+                keyboard.input_queue,
+                lambda: keyboard.running,  # Check if still running
+                phone_tree  # Root menu to return to
+            )
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     finally:
