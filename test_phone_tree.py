@@ -345,16 +345,45 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
                 logger.info(f"    Loaded phone tree for {system_info.name} (using local setup)")
 
             elif system_id == "TDTM":
-                # TDTM requires special handling - create a simple placeholder
-                # In a real deployment, this would work fine
-                system_tree = PhoneTree(
-                    "bios/system_TDTM.mp3",
-                    audio_handler=audio_player,
-                    options={
-                        "1": PhoneTree("", audio_handler=audio_player)
-                    }
-                )
-                logger.warning(f"    Using placeholder for {system_info.name} (hardware init not available in simulator)")
+                # TDTM requires special handling - load phone tree without hardware init
+                try:
+                    # Create a mock TDTMSystem instance that bypasses hardware init
+                    import types
+
+                    # Create mock instance with all needed attributes
+                    tdtm_instance = types.SimpleNamespace()
+                    tdtm_instance.audio_handler = audio_player
+                    tdtm_instance.recordings_dir = "recordings"
+                    tdtm_instance.instructions_dir = "user-instructions"
+                    tdtm_instance.phone_on_hook = False
+                    tdtm_instance.tts_available = False
+                    tdtm_instance.tts = None
+
+                    # Create mock hardware handler
+                    tdtm_instance.hardware_handler = types.SimpleNamespace()
+                    tdtm_instance.hardware_handler.input_queue = None  # Will be provided at runtime
+
+                    # Bind all needed methods from system_class
+                    for method_name in ['setup_phone_tree', 'play_extension', 'play_random_recording',
+                                       'record_message', 'stop_playback', 'say']:
+                        if hasattr(system_class, method_name):
+                            setattr(tdtm_instance, method_name,
+                                   types.MethodType(getattr(system_class, method_name), tdtm_instance))
+
+                    # Get the actual TDTM phone tree
+                    system_tree = tdtm_instance.setup_phone_tree()
+                    logger.info(f"    Loaded phone tree for {system_info.name} (using mock instance)")
+                except Exception as e:
+                    logger.error(f"    Failed to load TDTM phone tree: {e}", exc_info=True)
+                    # Fall back to placeholder
+                    system_tree = PhoneTree(
+                        "bios/system_TDTM.mp3",
+                        audio_handler=audio_player,
+                        options={
+                            "1": PhoneTree("", audio_handler=audio_player)
+                        }
+                    )
+                    logger.warning(f"    Using placeholder for {system_info.name}")
 
             else:
                 # Try to load normally for other systems
