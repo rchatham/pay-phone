@@ -37,7 +37,11 @@ class AudioPlayer:
             logger.info(f"[SILENT MODE] Would play: {filename}")
             return True
 
-        filepath = os.path.join(self.audio_dir, filename)
+        # Handle paths that already include the audio_dir prefix
+        if filename.startswith(self.audio_dir + os.sep):
+            filepath = filename
+        else:
+            filepath = os.path.join(self.audio_dir, filename)
         if not os.path.exists(filepath):
             logger.warning(f"Audio file not found: {filepath}")
             logger.info(f"[WOULD PLAY: {filename}]")
@@ -291,6 +295,13 @@ def navigate_bios_menu(bios_menu: PhoneTree, input_queue, hook_check):
 
                     logger.info(f"BIOS: Launching system from option '{digit}'")
 
+                    # Inject input_queue into TDTM mock if needed
+                    # TDTM's actions need access to the input queue via hardware_handler
+                    if hasattr(system_tree, '_system_instance'):
+                        if hasattr(system_tree._system_instance, 'hardware_handler'):
+                            if hasattr(system_tree._system_instance.hardware_handler, 'input_queue'):
+                                system_tree._system_instance.hardware_handler.input_queue = input_queue
+
                     # Navigate to the system with ITSELF as main_menu
                     # This is the key: system_tree is both the current node AND the main menu
                     system_tree.navigate(input_queue, hook_check, system_tree)
@@ -353,8 +364,8 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
                     # Create mock instance with all needed attributes
                     tdtm_instance = types.SimpleNamespace()
                     tdtm_instance.audio_handler = audio_player
-                    tdtm_instance.recordings_dir = "recordings"
-                    tdtm_instance.instructions_dir = "user-instructions"
+                    tdtm_instance.recordings_dir = "audio_files/recordings"
+                    tdtm_instance.instructions_dir = "audio_files/user-instructions"
                     tdtm_instance.phone_on_hook = False
                     tdtm_instance.tts_available = False
                     tdtm_instance.tts = None
@@ -372,6 +383,10 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
                     # Get the actual TDTM phone tree
                     system_tree = tdtm_instance.setup_phone_tree()
+
+                    # Store reference to TDTM instance so navigate_bios_menu can inject input_queue
+                    system_tree._system_instance = tdtm_instance
+
                     logger.info(f"    Loaded phone tree for {system_info.name} (using mock instance)")
                 except Exception as e:
                     logger.error(f"    Failed to load TDTM phone tree: {e}", exc_info=True)
