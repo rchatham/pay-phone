@@ -64,5 +64,9 @@ audio_files/*.mp3
 *.backup
 .cache/
 
+# Plugins (external systems linked via symlinks)
+plugins/*
+!plugins/.gitkeep
+
 # Claude Code configuration
 .claude/

@@ -23,8 +23,7 @@ class ConfigManager:
         "bios_exit_long_press_seconds": 5.0,
         "scan_paths": [
             "./phone_systems",
-            "../TDTM",
-            "../../TDTM"
+            "./plugins"
         ],
         "available_systems": []
     }

@@ -321,7 +321,7 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
     from payphone.config.settings import Config
 
     # Discover systems
-    manager = SystemManager(scan_paths=["./phone_systems", "../TDTM"])
+    manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
     systems = manager.discover_systems()
 
     logger.info(f"Discovered {len(systems)} systems for BIOS menu")

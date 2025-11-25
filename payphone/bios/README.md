@@ -19,7 +19,7 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
 ### 3. **Dynamic System Discovery**
 - Automatically scans multiple directories for phone systems:
   - `./phone_systems/` (built-in systems)
-  - `../TDTM/` (sibling repositories)
+  - `./plugins/` (external systems via symlinks)
   - Custom paths configured in `.bios_config.json`
 - No recompilation needed to add new systems
 
@@ -78,8 +78,7 @@ Edit `.bios_config.json` in the project root:
   "bios_exit_long_press_seconds": 5.0,
   "scan_paths": [
     "./phone_systems",
-    "../TDTM",
-    "../../TDTM"
+    "./plugins"
   ],
   "available_systems": []
 }

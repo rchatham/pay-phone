@@ -90,7 +90,7 @@ def test_system_manager():
 
     try:
         # Create system manager with phone_systems directory and TDTM
-        manager = SystemManager(scan_paths=["./phone_systems", "../TDTM"])
+        manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
         print("✓ SystemManager initialized")
 
         # Discover systems

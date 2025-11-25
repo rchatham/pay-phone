@@ -86,7 +86,7 @@ def main():
 
     # Discover available systems
     print("Discovering phone systems...")
-    manager = SystemManager(scan_paths=["./phone_systems", "../TDTM"])
+    manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
     systems = manager.discover_systems()
 
     print(f"Found {len(systems)} systems:")
