@@ -1,0 +1,13 @@
+# Development dependencies (works on macOS/Linux)
+# For Raspberry Pi deployment, use requirements.txt instead
+
+pygame>=2.0.0
+pyserial>=3.5
+python-dotenv>=0.19.0
+pytest>=6.0.0
+pytest-cov>=2.10.0
+mock>=4.0.0
+numpy>=1.19.0
+
+# Note: RPi.GPIO is excluded - it only works on Raspberry Pi
+# The codebase handles this gracefully with conditional imports

@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-coverage clean install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets
+.PHONY: help venv setup run run-simulator run-simulator-silent test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
 
 # Default target
 .DEFAULT_GOAL := help
@@ -9,6 +9,11 @@ GREEN := \033[0;32m
 YELLOW := \033[1;33m
 NC := \033[0m # No Color
 
+# Virtual environment
+VENV_DIR := venv
+PYTHON := $(VENV_DIR)/bin/python3
+PIP := $(VENV_DIR)/bin/pip
+
 ##@ General
 
 help: ## Display this help message
@@ -18,29 +23,57 @@ help: ## Display this help message
 
 ##@ Local Development
 
-install: ## Install Python dependencies locally
-	@echo "$(BLUE)Installing dependencies...$(NC)"
-	pip3 install -r requirements.txt
-	@echo "$(GREEN)✓ Dependencies installed$(NC)"
+venv: ## Create virtual environment (if not exists)
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+		echo "$(BLUE)Creating virtual environment...$(NC)"; \
+		python3 -m venv $(VENV_DIR); \
+		echo "$(GREEN)✓ Virtual environment created$(NC)"; \
+	else \
+		echo "$(YELLOW)Virtual environment already exists$(NC)"; \
+	fi
 
-test: ## Run unit tests locally (no hardware required)
+setup: venv ## Setup project (create venv and install dependencies)
+	@echo "$(BLUE)Installing dependencies...$(NC)"
+	$(PIP) install --upgrade pip
+	$(PIP) install -r requirements-dev.txt
+	@echo "$(GREEN)✓ Setup complete$(NC)"
+	@echo ""
+	@echo "$(YELLOW)To activate the virtual environment:$(NC)"
+	@echo "  source $(VENV_DIR)/bin/activate"
+
+install: setup ## Alias for 'setup'
+
+run: venv ## Run main payphone app locally (with mocked hardware)
+	@echo "$(BLUE)Starting payphone (local mode)...$(NC)"
+	@echo "$(YELLOW)Note: Hardware is mocked for local development$(NC)"
+	$(PYTHON) -m payphone.main
+
+run-simulator: venv ## Run interactive BIOS simulator
+	@echo "$(BLUE)Starting BIOS simulator...$(NC)"
+	$(PYTHON) test_phone_tree.py
+
+run-simulator-silent: venv ## Run BIOS simulator in silent mode (no audio)
+	@echo "$(BLUE)Starting BIOS simulator (silent)...$(NC)"
+	echo "4\ny" | $(PYTHON) test_phone_tree.py
+
+test: venv ## Run unit tests locally (no hardware required)
 	@echo "$(BLUE)Running unit tests...$(NC)"
-	pytest tests/unit -v
+	$(PYTHON) -m pytest tests/unit -v
 
 test-unit: test ## Alias for 'test'
 
-test-integration: ## Run integration tests locally
+test-integration: venv ## Run integration tests locally
 	@echo "$(BLUE)Running integration tests...$(NC)"
-	pytest tests/integration -v
+	$(PYTHON) -m pytest tests/integration -v
 
-test-coverage: ## Run tests with coverage report
+test-coverage: venv ## Run tests with coverage report
 	@echo "$(BLUE)Running tests with coverage...$(NC)"
-	pytest --cov=payphone --cov-report=html --cov-report=term-missing
+	$(PYTHON) -m pytest --cov=payphone --cov-report=html --cov-report=term-missing
 
-test-watch: ## Run tests in watch mode (requires pytest-watch)
+test-watch: venv ## Run tests in watch mode (requires pytest-watch)
 	@echo "$(BLUE)Running tests in watch mode...$(NC)"
 	@echo "$(YELLOW)Press Ctrl+C to stop$(NC)"
-	ptw -- -v
+	$(VENV_DIR)/bin/ptw -- -v
 
 clean: ## Clean generated files (cache, coverage, etc.)
 	@echo "$(BLUE)Cleaning generated files...$(NC)"
@@ -50,14 +83,23 @@ clean: ## Clean generated files (cache, coverage, etc.)
 	rm -rf htmlcov .coverage .coverage.* 2>/dev/null || true
 	@echo "$(GREEN)✓ Cleanup complete$(NC)"
 
-lint: ## Run code linting (requires pylint/flake8)
+clean-all: clean ## Clean everything including venv
+	@echo "$(BLUE)Removing virtual environment...$(NC)"
+	rm -rf $(VENV_DIR)
+	@echo "$(GREEN)✓ Full cleanup complete$(NC)"
+
+lint: venv ## Run code linting (requires pylint/flake8)
 	@echo "$(BLUE)Running linters...$(NC)"
-	@if command -v pylint >/dev/null 2>&1; then \
+	@if [ -f "$(VENV_DIR)/bin/pylint" ]; then \
+		$(VENV_DIR)/bin/pylint payphone/; \
+	elif command -v pylint >/dev/null 2>&1; then \
 		pylint payphone/; \
 	else \
 		echo "$(YELLOW)pylint not installed, skipping$(NC)"; \
 	fi
-	@if command -v flake8 >/dev/null 2>&1; then \
+	@if [ -f "$(VENV_DIR)/bin/flake8" ]; then \
+		$(VENV_DIR)/bin/flake8 payphone/; \
+	elif command -v flake8 >/dev/null 2>&1; then \
 		flake8 payphone/; \
 	else \
 		echo "$(YELLOW)flake8 not installed, skipping$(NC)"; \
@@ -219,23 +261,26 @@ quickstart: ## Quick start guide for new developers
 	@echo "$(BLUE)Payphone Project - Quick Start Guide$(NC)"
 	@echo "$(BLUE)================================================$(NC)"
 	@echo ""
-	@echo "$(GREEN)1. Install dependencies:$(NC)"
-	@echo "   make install"
+	@echo "$(GREEN)1. Setup project (creates venv + installs deps):$(NC)"
+	@echo "   make setup"
 	@echo ""
 	@echo "$(GREEN)2. Run local tests:$(NC)"
 	@echo "   make test"
 	@echo ""
-	@echo "$(GREEN)3. Setup 1Password secrets:$(NC)"
+	@echo "$(GREEN)3. Launch BIOS simulator:$(NC)"
+	@echo "   make run-simulator"
+	@echo ""
+	@echo "$(GREEN)4. Setup 1Password secrets (for Pi deployment):$(NC)"
 	@echo "   make setup-secrets"
 	@echo "   source scripts/load_secrets.sh"
 	@echo ""
-	@echo "$(GREEN)4. Deploy to Raspberry Pi:$(NC)"
+	@echo "$(GREEN)5. Deploy to Raspberry Pi:$(NC)"
 	@echo "   make deploy-full"
 	@echo ""
-	@echo "$(GREEN)5. Check status:$(NC)"
+	@echo "$(GREEN)6. Check status:$(NC)"
 	@echo "   make pi-status"
 	@echo ""
-	@echo "$(GREEN)6. View logs:$(NC)"
+	@echo "$(GREEN)7. View logs:$(NC)"
 	@echo "   make pi-logs"
 	@echo ""
 	@echo "For detailed documentation, see:"
