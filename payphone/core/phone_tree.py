@@ -267,9 +267,17 @@ class PhoneTree:
                     self.audio_handler.play_file("prompts/invalid_extension.mp3", blocking=True)
                 # else: next_extension is None (0 pressed or audio finished with no input) -> return to menu
             else:
-                # Original behavior: Wait for audio to finish before returning to menu
+                # Wait for audio but monitor for return-to-menu key
+                return_key = getattr(main_menu, 'return_to_menu_key', '0') if main_menu else '0'
                 while self.audio_handler.is_playing() and hook_status():
-                    time.sleep(0.1)
+                    try:
+                        digit = input_queue.get(timeout=0.1)
+                        if digit == return_key:
+                            self.audio_handler.stop()
+                            logger.info(f"Return key '{return_key}' pressed during playback")
+                            break
+                    except queue.Empty:
+                        pass
 
             if main_menu:
                 time.sleep(2)
@@ -509,13 +517,6 @@ class PhoneTree:
                                hook_status: Callable,
                                main_menu: Optional['PhoneTree']) -> None:
         """Process digit in extension collection mode"""
-        # Check if user pressed return-to-menu key to cancel extension entry
-        if digit == self.return_to_menu_key and len(context.digit_buffer) == 0:
-            # Pressed return key with empty buffer - cancel extension mode
-            logger.info(f"Extension mode cancelled with '{self.return_to_menu_key}'")
-            self._handle_return_to_menu(main_menu, input_queue, hook_status, context)
-            return
-
         # Validate digit
         if digit not in '0123456789*#':
             logger.warning(f"Invalid digit in extension: {digit}")
