@@ -234,7 +234,8 @@ class PhoneTree:
             return
 
         # Play audio prompt (non-blocking to allow interruption)
-        self.audio_handler.play_file(self.audio_file, blocking=False)
+        if self.audio_file:
+            self.audio_handler.play_file(self.audio_file, blocking=False)
 
         # Execute action if present
         if self.action:
