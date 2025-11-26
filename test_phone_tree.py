@@ -375,8 +375,8 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
                     tdtm_instance.hardware_handler.input_queue = None  # Will be provided at runtime
 
                     # Bind all needed methods from system_class
-                    for method_name in ['setup_phone_tree', 'play_extension', 'play_random_recording',
-                                       'record_message', 'stop_playback', 'say']:
+                    for method_name in ['setup_phone_tree', '_get_available_recordings', 'play_extension',
+                                       'play_random_recording', 'record_message', 'stop_playback', 'say']:
                         if hasattr(system_class, method_name):
                             setattr(tdtm_instance, method_name,
                                    types.MethodType(getattr(system_class, method_name), tdtm_instance))
