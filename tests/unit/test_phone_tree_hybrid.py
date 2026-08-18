@@ -47,6 +47,63 @@ class TestPhoneTreeHybridModeValidation:
         assert tree.hybrid_mode is True
         assert len(tree.options) == 4
 
+    def test_explicit_direct_options_separate_bare_and_extension_routes(self):
+        """The same digit can map independently before and after the prefix."""
+        mock_audio = MockAudioHandler()
+        direct_node = PhoneTree("direct.mp3", audio_handler=mock_audio)
+        extension_node = PhoneTree("extension.mp3", audio_handler=mock_audio)
+        tree = PhoneTree(
+            audio_file="menu/main.mp3",
+            hybrid_mode=True,
+            extension_length=3,
+            audio_handler=mock_audio,
+            direct_options={"1": direct_node},
+            options={"001": extension_node, "01": extension_node, "1": extension_node},
+        )
+
+        assert tree._hybrid_direct_options()["1"] is direct_node
+        assert tree.options["1"] is extension_node
+
+        direct_node.navigate = Mock()
+        extension_node.navigate = Mock()
+        context = HybridNavigationContext()
+        input_queue = queue.Queue()
+        tree._handle_single_digit("1", context, input_queue, lambda: True, tree)
+        direct_node.navigate.assert_called_once()
+        extension_node.navigate.assert_not_called()
+
+        context.in_extension_mode = True
+        tree._submit_extension_str("1", context, input_queue, lambda: True, tree)
+        extension_node.navigate.assert_called_once()
+
+    def test_explicit_direct_options_are_validated_without_extensions(self):
+        """Reserved bare keys are rejected even when no extension routes exist."""
+        mock_audio = MockAudioHandler()
+        with pytest.raises(ValueError, match="Return key '0' cannot be a menu option"):
+            PhoneTree(
+                audio_file="menu/main.mp3",
+                hybrid_mode=True,
+                audio_handler=mock_audio,
+                direct_options={"0": PhoneTree("invalid.mp3", audio_handler=mock_audio)},
+                options={},
+            )
+
+    def test_explicit_empty_direct_options_disable_legacy_speed_dials(self):
+        """Single-digit extension aliases are not bare routes when explicitly disabled."""
+        mock_audio = MockAudioHandler()
+        extension_node = PhoneTree("extension.mp3", audio_handler=mock_audio)
+        tree = PhoneTree(
+            audio_file="menu/main.mp3",
+            hybrid_mode=True,
+            extension_length=3,
+            audio_handler=mock_audio,
+            direct_options={},
+            options={"001": extension_node, "01": extension_node, "1": extension_node},
+        )
+
+        assert tree._hybrid_direct_options() == {}
+        assert tree.options["1"] is extension_node
+
     def test_hybrid_mode_rejects_prefix_as_option(self):
         """Test that extension prefix cannot be a menu option"""
         mock_audio = MockAudioHandler()

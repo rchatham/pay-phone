@@ -38,7 +38,8 @@ class PhoneTree:
                  hybrid_mode: bool = False,
                  extension_prefix: str = '*',
                  return_to_menu_key: str = '0',
-                 allow_continuous_dialing: bool = True):
+                 allow_continuous_dialing: bool = True,
+                 direct_options: Optional[Dict[str, 'PhoneTree']] = None):
         """
         Initialize a PhoneTree node.
 
@@ -56,6 +57,9 @@ class PhoneTree:
             extension_terminator: Key to end variable-length extension input (default '#')
             extension_timeout: Seconds of inactivity before auto-submitting extension
             hybrid_mode: Enable hybrid single-digit + extension dialing
+            direct_options: Optional map used only for bare single-digit input in
+                            hybrid mode. When omitted, single-digit entries in
+                            options retain the legacy direct-option behavior.
             extension_prefix: Key to activate extension mode (default '*')
             return_to_menu_key: Universal "go back" key (default '0')
             allow_continuous_dialing: Allow dialing next extension while current plays
@@ -70,6 +74,7 @@ class PhoneTree:
         self.extension_terminator = extension_terminator
         self.extension_timeout = extension_timeout
         self.hybrid_mode = hybrid_mode
+        self.direct_options = direct_options
         self.extension_prefix = extension_prefix
         self.return_to_menu_key = return_to_menu_key
         self.allow_continuous_dialing = allow_continuous_dialing
@@ -77,7 +82,7 @@ class PhoneTree:
         # Validate configuration
         if self.extension_mode and self.options:
             self._validate_extension_options()
-        elif self.hybrid_mode and self.options:
+        elif self.hybrid_mode and (self.options or self.direct_options is not None):
             self._validate_hybrid_options()
 
     def _validate_extension_options(self) -> None:
@@ -132,23 +137,32 @@ class PhoneTree:
         Raises:
             ValueError: If options violate hybrid mode constraints
         """
-        if not self.options:
+        if not self.options and not self.direct_options:
             return
 
-        # Ensure extension_prefix is not in options
-        if self.extension_prefix in self.options:
+        direct_options = self._hybrid_direct_options()
+
+        # Prefix and return keys are reserved only in the bare-key namespace.
+        # They remain valid extension aliases when explicit direct_options keep
+        # the two routing namespaces separate.
+        if self.extension_prefix in direct_options:
             raise ValueError(
                 f"Extension prefix '{self.extension_prefix}' cannot be a menu option"
             )
-
-        # Ensure return_to_menu_key is not in options
-        if self.return_to_menu_key in self.options:
+        if self.return_to_menu_key in direct_options:
             raise ValueError(
                 f"Return key '{self.return_to_menu_key}' cannot be a menu option"
             )
 
-        # Separate single-digit and multi-digit options
-        single_digit_keys = [k for k in self.options.keys() if len(k) == 1]
+        invalid_direct_keys = [key for key in direct_options if len(key) != 1]
+        if invalid_direct_keys:
+            raise ValueError(
+                f"Direct options must be single digits. Invalid keys: {invalid_direct_keys}"
+            )
+
+        # options remains the extension namespace. In legacy mode its
+        # single-digit entries are also exposed as direct choices.
+        single_digit_keys = list(direct_options)
         multi_digit_keys = [k for k in self.options.keys() if len(k) > 1]
 
         # Note: In hybrid mode, extensions are accessed via prefix (e.g., *101)
@@ -167,9 +181,15 @@ class PhoneTree:
                     f"Invalid keys: {invalid_keys}"
                 )
 
-        logger.info(f"Hybrid mode validated: {len(single_digit_keys)} single-digit options, "
-                   f"{len(multi_digit_keys)} extensions, "
+        logger.info(f"Hybrid mode validated: {len(single_digit_keys)} direct options, "
+                   f"{len(self.options)} extension aliases, "
                    f"prefix='{self.extension_prefix}', return_key='{self.return_to_menu_key}'")
+
+    def _hybrid_direct_options(self) -> Dict[str, 'PhoneTree']:
+        """Return the explicit direct map or the legacy single-digit option view."""
+        if self.direct_options is not None:
+            return self.direct_options
+        return {key: node for key, node in self.options.items() if len(key) == 1}
 
     def _collect_extension(self,
                           input_queue: queue.Queue,
@@ -254,8 +274,9 @@ class PhoneTree:
                     main_menu.navigate(input_queue, hook_status, main_menu)
                 return
 
-        # If no options, return to main menu
-        if not self.options:
+        # If no routes exist, return to the main menu. Explicit hybrid direct
+        # options count as routes even when the extension namespace is empty.
+        if not self.options and not (self.hybrid_mode and self._hybrid_direct_options()):
             # Check if we're in hybrid mode with continuous dialing enabled
             if main_menu and hasattr(main_menu, 'hybrid_mode') and main_menu.hybrid_mode and main_menu.allow_continuous_dialing:
                 # Collect next extension while audio plays
@@ -502,9 +523,11 @@ class PhoneTree:
             self.audio_handler.stop()
             logger.info(f"Audio interrupted by button press: {digit}")
 
-        # Validate option
-        if digit in self.options:
-            self.options[digit].navigate(input_queue, hook_status, main_menu)
+        # Validate against the bare-key namespace. Extension aliases are only
+        # consulted after the extension prefix activates collection mode.
+        direct_options = self._hybrid_direct_options()
+        if digit in direct_options:
+            direct_options[digit].navigate(input_queue, hook_status, main_menu)
         else:
             # Invalid option
             if not audio_was_playing:
