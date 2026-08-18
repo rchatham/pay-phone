@@ -92,10 +92,27 @@ class TestPhoneTreeHybridModeValidation:
         assert tree.hybrid_mode is True
         assert len(tree.options) == 2
 
-    def test_hybrid_mode_validates_extension_length(self):
-        """Test that all extensions must match extension_length if specified"""
+    def test_hybrid_mode_allows_shorter_terminated_aliases(self):
+        """Short aliases may submit with the terminator or inactivity timeout."""
         mock_audio = MockAudioHandler()
-        with pytest.raises(ValueError, match="All extensions must be 3 digits long"):
+        tree = PhoneTree(
+            audio_file="menu/main.mp3",
+            hybrid_mode=True,
+            extension_length=3,
+            audio_handler=mock_audio,
+            options={
+                "001": PhoneTree("message.mp3", audio_handler=mock_audio),
+                "01": PhoneTree("message.mp3", audio_handler=mock_audio),
+                "1": PhoneTree("message.mp3", audio_handler=mock_audio),
+            },
+        )
+
+        assert set(tree.options) == {"001", "01", "1"}
+
+    def test_hybrid_mode_rejects_options_longer_than_extension_length(self):
+        """Options longer than the auto-submit maximum are unreachable."""
+        mock_audio = MockAudioHandler()
+        with pytest.raises(ValueError, match="Extensions cannot exceed 3 digits"):
             PhoneTree(
                 audio_file="menu/main.mp3",
                 hybrid_mode=True,
@@ -103,7 +120,7 @@ class TestPhoneTreeHybridModeValidation:
                 audio_handler=mock_audio,
                 options={
                     "101": PhoneTree("alice.mp3", audio_handler=mock_audio),
-                    "10": PhoneTree("short.mp3", audio_handler=mock_audio),  # Too short
+                    "1001": PhoneTree("too-long.mp3", audio_handler=mock_audio),
                 }
             )
 

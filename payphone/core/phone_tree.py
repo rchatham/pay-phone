@@ -49,8 +49,10 @@ class PhoneTree:
             timeout: Overall timeout in seconds before returning to main menu
             audio_handler: AudioHandler instance (created if not provided)
             extension_mode: Enable multi-digit extension dialing
-            extension_length: Fixed length for extensions (e.g., 3 for "101")
-                             If None, uses terminator to end input
+            extension_length: Maximum extension length (e.g., 3 for "101").
+                             Input auto-submits at this length; registered shorter
+                             aliases can submit with the terminator or timeout.
+                             If None, uses the terminator or timeout only.
             extension_terminator: Key to end variable-length extension input (default '#')
             extension_timeout: Seconds of inactivity before auto-submitting extension
             hybrid_mode: Enable hybrid single-digit + extension dialing
@@ -153,12 +155,15 @@ class PhoneTree:
         # So "1" as a single-digit option and "101" as an extension do NOT conflict
         # User presses "1" for direct option, or "*101" for extension
 
-        # Validate extension length consistency (if specified)
+        # In hybrid mode extension_length is the auto-submit maximum. Shorter
+        # aliases remain useful when callers terminate them with '#' or pause
+        # until extension_timeout; only options longer than the maximum are
+        # unreachable and therefore invalid.
         if self.extension_length:
-            invalid_keys = [k for k in multi_digit_keys if len(k) != self.extension_length]
+            invalid_keys = [k for k in multi_digit_keys if len(k) > self.extension_length]
             if invalid_keys:
                 raise ValueError(
-                    f"All extensions must be {self.extension_length} digits long. "
+                    f"Extensions cannot exceed {self.extension_length} digits. "
                     f"Invalid keys: {invalid_keys}"
                 )
 
