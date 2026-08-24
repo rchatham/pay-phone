@@ -18,8 +18,9 @@ class ConfigManager:
 
     DEFAULT_CONFIG = {
         "last_system": None,
-        "auto_launch": True,
-        "bios_enter_hold_seconds": 3.0,
+        "auto_launch": False,
+        "always_show_menu_on_pickup": True,
+        "bios_enter_hold_seconds": 0.0,
         "bios_exit_long_press_seconds": 5.0,
         "scan_paths": [
             "./phone_systems",
@@ -92,7 +93,11 @@ class ConfigManager:
 
     def get_auto_launch(self) -> bool:
         """Check if auto-launch is enabled"""
-        return self.config.get("auto_launch", True)
+        return self.config.get("auto_launch", self.DEFAULT_CONFIG["auto_launch"])
+
+    def get_always_show_menu_on_pickup(self) -> bool:
+        """Check if pickup should always enter the BIOS/main menu."""
+        return self.config.get("always_show_menu_on_pickup", self.DEFAULT_CONFIG["always_show_menu_on_pickup"])
 
     def get_scan_paths(self) -> List[str]:
         """Get list of paths to scan for phone systems"""

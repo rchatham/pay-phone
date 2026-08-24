@@ -73,8 +73,9 @@ Edit `.bios_config.json` in the project root:
 ```json
 {
   "last_system": "information_booth",
-  "auto_launch": true,
-  "bios_enter_hold_seconds": 3.0,
+  "auto_launch": false,
+  "always_show_menu_on_pickup": true,
+  "bios_enter_hold_seconds": 0.0,
   "bios_exit_long_press_seconds": 5.0,
   "scan_paths": [
     "./phone_systems",
@@ -86,8 +87,9 @@ Edit `.bios_config.json` in the project root:
 
 **Options:**
 - `last_system`: ID of last selected system (auto-set by BIOS)
-- `auto_launch`: If true, auto-launch last system; if false, always show BIOS menu
-- `bios_enter_hold_seconds`: Seconds to hold hook to enter BIOS (default: 3.0)
+- `auto_launch`: If true, auto-launch last system unless `always_show_menu_on_pickup` is enabled; if false, always show BIOS menu
+- `always_show_menu_on_pickup`: If true, picking up the handset opens the BIOS menu by default
+- `bios_enter_hold_seconds`: Seconds to hold hook to enter BIOS in legacy auto-launch mode (default: 0.0)
 - `bios_exit_long_press_seconds`: Seconds to hold * to return to BIOS (default: 5.0)
 - `scan_paths`: Directories to scan for phone systems
 - `available_systems`: Auto-populated with discovered systems
@@ -159,7 +161,7 @@ Also needed in `audio_files/prompts/`:
 ### BIOSBootloader (`bootloader.py`)
 Main bootloader class that:
 - Extends `PhoneSystemBase`
-- Detects hook hold on pickup
+- Opens BIOS menu on pickup by default, with legacy hook-hold support for auto-launch mode
 - Monitors for long-press * during operation
 - Manages system launching and switching
 

@@ -3,7 +3,7 @@ BIOS Bootloader system for payphone.
 
 Provides system selection menu, configuration, and hot-reloading capabilities.
 Supports:
-- Hold hook for 3 seconds on boot to enter BIOS menu
+- Pick up handset to enter BIOS menu by default
 - Long-press * for 5 seconds during system operation to return to BIOS
 - Auto-launch last selected system
 - Dynamic discovery and loading of phone systems
@@ -77,7 +77,14 @@ class BIOSBootloader(PhoneSystemBase):
             # Phone picked up
             self.phone_on_hook = False
 
-            # Record pickup time for hold detection
+            # Enter the BIOS/main menu immediately when configured to do so.
+            if self.bios_config.get_always_show_menu_on_pickup() or not self.bios_config.get_auto_launch():
+                logger.info("Entering BIOS menu on pickup")
+                self.in_bios_menu = True
+                self.start_call()
+                return
+
+            # Record pickup time for hold detection when legacy auto-launch is enabled.
             self.hook_pickup_time = time.time()
 
             # Wait for hold threshold to check if user wants BIOS
