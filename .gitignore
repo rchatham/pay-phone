@@ -67,6 +67,10 @@ audio_files/*.mp3
 # Plugins (external systems linked via symlinks)
 plugins/*
 !plugins/.gitkeep
+!plugins/LAM/
+!plugins/LAM/**
+plugins/LAM/__pycache__/
+plugins/LAM/**/*.pyc
 
 # Claude Code configuration
 .claude/
