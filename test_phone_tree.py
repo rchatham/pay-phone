@@ -10,6 +10,7 @@ import sys
 import queue
 import threading
 import time
+from pathlib import Path
 
 # Add payphone to path
 sys.path.insert(0, os.path.dirname(__file__))
@@ -326,18 +327,39 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     logger.info(f"Discovered {len(systems)} systems for BIOS menu")
 
-    # Build menu options by actually loading each system
+    # Build menu options by actually loading each system. Keep stable simulator slots:
+    # Information Booth first, TDTM second when its plugin exists, then remaining plugins.
+    # This keeps BM Info Line as an additional option instead of taking TDTM's slot when
+    # local TDTM dependencies are missing.
+    from types import SimpleNamespace
+    ordered_systems = []
+    added_system_ids = set()
+    for preferred_id in ("information_booth", "TDTM"):
+        if preferred_id in systems:
+            ordered_systems.append((preferred_id, systems[preferred_id]))
+            added_system_ids.add(preferred_id)
+        elif preferred_id == "TDTM" and Path("plugins/TDTM").exists():
+            ordered_systems.append((preferred_id, SimpleNamespace(name="TDTM System")))
+            added_system_ids.add(preferred_id)
+
+    for system_id, system_info in systems.items():
+        if system_id not in added_system_ids:
+            ordered_systems.append((system_id, system_info))
+            added_system_ids.add(system_id)
+
     menu_options = {}
-    for idx, (system_id, system_info) in enumerate(systems.items(), start=1):
+    system_labels = {}
+    for idx, (system_id, system_info) in enumerate(ordered_systems, start=1):
         if idx > 9:
             break
 
         digit = str(idx)
         logger.info(f"  {digit}: {system_info.name}")
 
-        # Load the system class
-        system_class = manager.load_system(system_id)
-        if not system_class:
+        # Load the system class. TDTM is allowed to fall back to a placeholder in the
+        # simulator when optional dependencies are not installed locally.
+        system_class = manager.load_system(system_id) if system_id in systems else None
+        if not system_class and system_id != "TDTM":
             logger.error(f"Failed to load system: {system_id}")
             continue
 
@@ -356,56 +378,80 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
                 logger.info(f"    Loaded phone tree for {system_info.name} (using local setup)")
 
             elif system_id == "TDTM":
-                # TDTM requires special handling - load phone tree without hardware init
-                try:
-                    # Create a mock TDTMSystem instance that bypasses hardware init
-                    import types
-
-                    # Create mock instance with all needed attributes
-                    tdtm_instance = types.SimpleNamespace()
-                    tdtm_instance.audio_handler = audio_player
-                    tdtm_instance.recordings_dir = "audio_files/recordings"
-                    tdtm_instance.instructions_dir = "audio_files/user-instructions"
-                    tdtm_instance.phone_on_hook = False
-                    tdtm_instance.tts_available = False
-                    tdtm_instance.tts = None
-
-                    # Create mock hardware handler
-                    tdtm_instance.hardware_handler = types.SimpleNamespace()
-                    tdtm_instance.hardware_handler.input_queue = None  # Will be provided at runtime
-
-                    # Bind all needed methods from system_class
-                    for method_name in ['setup_phone_tree', '_get_available_recordings', 'play_extension',
-                                       'play_random_recording', 'record_message', 'stop_playback', 'say']:
-                        if hasattr(system_class, method_name):
-                            setattr(tdtm_instance, method_name,
-                                   types.MethodType(getattr(system_class, method_name), tdtm_instance))
-
-                    # Get the actual TDTM phone tree
-                    system_tree = tdtm_instance.setup_phone_tree()
-
-                    # Store reference to TDTM instance so navigate_bios_menu can inject input_queue
-                    system_tree._system_instance = tdtm_instance
-
-                    logger.info(f"    Loaded phone tree for {system_info.name} (using mock instance)")
-                except Exception as e:
-                    logger.error(f"    Failed to load TDTM phone tree: {e}", exc_info=True)
-                    # Fall back to placeholder
+                # TDTM requires special handling - load phone tree without hardware init.
+                # If local dependencies are missing, keep its BIOS slot with a placeholder.
+                if system_class is None:
                     system_tree = PhoneTree(
                         "bios/system_TDTM.mp3",
                         audio_handler=audio_player,
-                        options={
-                            "1": PhoneTree("", audio_handler=audio_player)
-                        }
+                        options={"1": PhoneTree("", audio_handler=audio_player)}
                     )
-                    logger.warning(f"    Using placeholder for {system_info.name}")
+                    logger.warning(f"    Using placeholder for {system_info.name}; install TDTM dependencies for full simulator support")
+                else:
+                    try:
+                        # Create a mock TDTMSystem instance that bypasses hardware init
+                        import types
+
+                        # Create mock instance with all needed attributes
+                        tdtm_instance = types.SimpleNamespace()
+                        tdtm_instance.audio_handler = audio_player
+                        tdtm_instance.recordings_dir = "audio_files/recordings"
+                        tdtm_instance.instructions_dir = "audio_files/user-instructions"
+                        tdtm_instance.phone_on_hook = False
+                        tdtm_instance.tts_available = False
+                        tdtm_instance.tts = None
+
+                        # Create mock hardware handler
+                        tdtm_instance.hardware_handler = types.SimpleNamespace()
+                        tdtm_instance.hardware_handler.input_queue = None  # Will be provided at runtime
+
+                        # Bind all needed methods from system_class
+                        for method_name in ['setup_phone_tree', '_get_available_recordings', 'play_extension',
+                                           'play_random_recording', 'record_message', 'stop_playback', 'say']:
+                            if hasattr(system_class, method_name):
+                                setattr(tdtm_instance, method_name,
+                                       types.MethodType(getattr(system_class, method_name), tdtm_instance))
+
+                        # Get the actual TDTM phone tree
+                        system_tree = tdtm_instance.setup_phone_tree()
+
+                        # Store reference to TDTM instance so navigate_bios_menu can inject input_queue
+                        system_tree._system_instance = tdtm_instance
+
+                        logger.info(f"    Loaded phone tree for {system_info.name} (using mock instance)")
+                    except Exception as e:
+                        logger.error(f"    Failed to load TDTM phone tree: {e}", exc_info=True)
+                        # Fall back to placeholder
+                        system_tree = PhoneTree(
+                            "bios/system_TDTM.mp3",
+                            audio_handler=audio_player,
+                            options={
+                                "1": PhoneTree("", audio_handler=audio_player)
+                            }
+                        )
+                        logger.warning(f"    Using placeholder for {system_info.name}")
 
             else:
-                # Try to load normally for other systems
+                # Try to load normally for other systems, but patch PhoneSystemBase so
+                # simulator plugins use the local AudioPlayer instead of Raspberry Pi ALSA.
                 config = Config()
-                system_instance = system_class(config)
+                config.USE_GPIO = False
+                import payphone.core.system as core_system
+                import types
+                original_audio_handler = core_system.AudioHandler
+                original_serial_handler = core_system.SerialHandler
+                core_system.AudioHandler = lambda audio_dir="audio_files": audio_player
+                core_system.SerialHandler = lambda port=None, baudrate=None: types.SimpleNamespace(input_queue=queue.Queue())
+                try:
+                    system_instance = system_class(config)
+                finally:
+                    core_system.AudioHandler = original_audio_handler
+                    core_system.SerialHandler = original_serial_handler
                 system_instance.audio_handler = audio_player
                 system_tree = system_instance.setup_phone_tree()
+                # Keep the instance so simulator navigation can inject the shared input queue.
+                # Plugin actions like BM audio-tour stop entry read from hardware_handler.input_queue.
+                system_tree._system_instance = system_instance
                 logger.info(f"    Loaded phone tree for {system_info.name}")
 
             # Create a launcher node that navigates to the system with ITSELF as main_menu
@@ -431,6 +477,7 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
             # Directly assign the system tree with proper main_menu reference
             # We'll handle this in the navigation logic below
             menu_options[digit] = system_tree
+            system_labels[digit] = system_info.name
 
         except Exception as e:
             logger.warning(f"Could not load system {system_id} in simulator: {e}")
@@ -443,6 +490,7 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
                 }
             )
             menu_options[digit] = placeholder
+            system_labels[digit] = system_info.name
             logger.info(f"    Using placeholder for {system_info.name}")
 
     # Main BIOS menu
@@ -452,8 +500,41 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
         options=menu_options,
         timeout=60
     )
+    bios_menu._system_labels = system_labels
 
     return bios_menu
+
+
+def discover_bios_system_labels():
+    """Return stable BIOS simulator labels without importing plugin code."""
+    label_by_id = {
+        "information_booth": "InformationBoothSystem",
+        "TDTM": "TDTM System",
+        "bm-info-line": "Burning Man Info Line",
+    }
+    available_ids = []
+
+    for parent in (Path("phone_systems"), Path("plugins")):
+        if not parent.exists():
+            continue
+        for child in parent.iterdir():
+            if child.is_dir() and (child / "system.py").exists():
+                available_ids.append(child.name)
+
+    ordered_ids = []
+    for preferred_id in ("information_booth", "TDTM"):
+        if preferred_id in available_ids:
+            ordered_ids.append(preferred_id)
+
+    for system_id in available_ids:
+        if system_id not in ordered_ids:
+            ordered_ids.append(system_id)
+
+    return {
+        str(index): label_by_id.get(system_id, system_id.replace("-", " ").replace("_", " ").title())
+        for index, system_id in enumerate(ordered_ids[:9], start=1)
+    }
+
 
 def main():
     """Run the phone tree simulator"""
@@ -477,12 +558,11 @@ def main():
     if use_bios:
         print("BIOS MODE - System Selection Menu")
         print("="*60)
-        print("\nTest scenarios:")
-        print("  SYSTEM SELECTION:")
-        print("     - Press '1' for Information Booth System")
-        print("     - Press '2' for TDTM System")
+        print("\nAvailable systems:")
+        for digit, label in discover_bios_system_labels().items():
+            print(f"  Press '{digit}' for {label}")
         print("\n  Note: This is a simulated BIOS menu.")
-        print("  On real hardware, hold hook for 3s to enter BIOS.")
+        print("  On real hardware, picking up the handset opens the BIOS menu by default.")
     elif use_hybrid:
         print("HYBRID MODE - Single-Digit + * Prefix Extensions")
         print("="*60)

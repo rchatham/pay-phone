@@ -1,4 +1,4 @@
-.PHONY: help venv setup run run-simulator run-simulator-silent test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
+.PHONY: help venv setup run run-simulator run-simulator-silent ensure-bm-info-line-plugin test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
 
 # Default target
 .DEFAULT_GOAL := help
@@ -48,11 +48,22 @@ run: venv ## Run main payphone app locally (with mocked hardware)
 	@echo "$(YELLOW)Note: Hardware is mocked for local development$(NC)"
 	$(PYTHON) -m payphone.main
 
-run-simulator: venv ## Run interactive BIOS simulator
+ensure-bm-info-line-plugin: ## Link sibling bm-info-line plugin into BIOS plugins for local simulator
+	@if [ ! -e plugins/bm-info-line ]; then \
+		if [ -d ../bm-info-line ]; then \
+			echo "$(BLUE)Linking bm-info-line plugin for BIOS simulator...$(NC)"; \
+			ln -s ../../bm-info-line plugins/bm-info-line; \
+			echo "$(GREEN)✓ plugins/bm-info-line linked$(NC)"; \
+		else \
+			echo "$(YELLOW)bm-info-line sibling repo not found at ../bm-info-line; BIOS will skip it$(NC)"; \
+		fi; \
+	fi
+
+run-simulator: venv ensure-bm-info-line-plugin ## Run interactive BIOS simulator
 	@echo "$(BLUE)Starting BIOS simulator...$(NC)"
 	$(PYTHON) test_phone_tree.py
 
-run-simulator-silent: venv ## Run BIOS simulator in silent mode (no audio)
+run-simulator-silent: venv ensure-bm-info-line-plugin ## Run BIOS simulator in silent mode (no audio)
 	@echo "$(BLUE)Starting BIOS simulator (silent)...$(NC)"
 	echo "4\ny" | $(PYTHON) test_phone_tree.py
 

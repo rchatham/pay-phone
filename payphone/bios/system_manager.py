@@ -9,7 +9,9 @@ import importlib
 import importlib.util
 import inspect
 import logging
+import re
 import sys
+import types
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Any
 
@@ -117,20 +119,14 @@ class SystemManager:
             return
 
         try:
-            # Generate a unique module name
+            # Generate a unique import-safe module name while preserving the public system ID
             system_id = path.name
-            module_name = f"phone_systems.{system_id}.system"
+            module_id = self._module_id_for_system(system_id)
+            module_name = f"phone_systems.{module_id}.system"
+            added_paths = self._prepare_import_path(path, module_id)
 
-            # Try importing as a package first (if installed)
             try:
-                spec = importlib.util.find_spec(module_name)
-                if spec is not None:
-                    module = importlib.import_module(module_name)
-                    logger.debug(f"Imported as package: {module_name}")
-                else:
-                    raise ImportError("Not a package")
-            except ImportError:
-                # Import from file path directly
+                # Import from file path directly so plugin IDs can include characters like hyphens.
                 spec = importlib.util.spec_from_file_location(module_name, system_file)
                 if spec is None or spec.loader is None:
                     logger.warning(f"Could not create spec for {system_file}")
@@ -140,6 +136,8 @@ class SystemManager:
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
                 logger.debug(f"Imported from file: {system_file}")
+            finally:
+                self._cleanup_import_path(added_paths)
 
             # Find classes that inherit from PhoneSystemBase
             for name, obj in inspect.getmembers(module, inspect.isclass):
@@ -171,6 +169,44 @@ class SystemManager:
 
         except Exception as e:
             logger.error(f"Error scanning {path}: {e}", exc_info=True)
+
+    def _module_id_for_system(self, system_id: str) -> str:
+        """Return an import-safe module ID for a public system ID."""
+        module_id = re.sub(r"\W", "_", system_id)
+        if not module_id or module_id[0].isdigit():
+            module_id = f"system_{module_id}"
+        return module_id
+
+    def _prepare_import_path(self, path: Path, module_id: str) -> List[str]:
+        """Prepare temporary sys.path entries and parent packages for plugin imports."""
+        added_paths = []
+        resolved_path = path.resolve()
+        for import_path in (path, resolved_path, resolved_path.parent):
+            import_path_str = str(import_path)
+            if import_path_str not in sys.path:
+                sys.path.insert(0, import_path_str)
+                added_paths.append(import_path_str)
+
+        if "phone_systems" not in sys.modules:
+            package = types.ModuleType("phone_systems")
+            package.__path__ = []
+            sys.modules["phone_systems"] = package
+
+        package_name = f"phone_systems.{module_id}"
+        if package_name not in sys.modules:
+            package = types.ModuleType(package_name)
+            package.__path__ = [str(path), str(resolved_path)]
+            sys.modules[package_name] = package
+
+        return added_paths
+
+    def _cleanup_import_path(self, added_paths: List[str]) -> None:
+        """Remove temporary sys.path entries added for plugin import."""
+        for import_path in added_paths:
+            try:
+                sys.path.remove(import_path)
+            except ValueError:
+                pass
 
     def _get_system_metadata(self, system_class: Type[PhoneSystemBase]) -> Dict[str, str]:
         """
