@@ -6,6 +6,7 @@ This provides the core functionality for running a payphone system,
 while allowing subclasses to define their own phone tree structure.
 """
 import logging
+import queue
 import signal
 import threading
 import time
@@ -69,6 +70,36 @@ class PhoneSystemBase(ABC):
                 baudrate=self.config.BAUDRATE
             )
 
+        self.tts = self._init_tts()
+        self.tts_available = self.tts is not None
+
+    def _init_tts(self):
+        """Initialize an optional pyttsx3 text-to-speech engine."""
+        try:
+            import pyttsx3
+        except ImportError:
+            logger.info("pyttsx3 not available - TTS disabled")
+            return None
+
+        try:
+            return pyttsx3.init()
+        except Exception as exc:
+            logger.warning("Could not initialize TTS: %s", exc)
+            return None
+
+    def say(self, text: str, blocking: bool = True) -> None:
+        """Speak text with the configured TTS engine when available."""
+        if not self.tts_available or self.tts is None:
+            logger.info("TTS unavailable: %s", text)
+            return
+
+        try:
+            self.tts.say(text)
+            if blocking:
+                self.tts.runAndWait()
+        except Exception as exc:
+            logger.error("TTS error: %s", exc)
+
     @abstractmethod
     def setup_phone_tree(self) -> PhoneTree:
         """
@@ -129,12 +160,29 @@ class PhoneSystemBase(ABC):
             main_menu
         )
 
+    def clear_input_queue(self) -> int:
+        """Remove all pending keypad events from the hardware input queue.
+
+        Returns:
+            int: Number of queued keypresses removed.
+        """
+        cleared_count = 0
+        while not self.hardware_handler.input_queue.empty():
+            try:
+                self.hardware_handler.input_queue.get_nowait()
+                cleared_count += 1
+            except queue.Empty:
+                break
+
+        if cleared_count > 0:
+            logger.debug("Cleared %s keypresses from input queue", cleared_count)
+
+        return cleared_count
+
     def end_call(self):
         """End current call"""
         self.audio_handler.stop()
-        # Clear input queue
-        while not self.hardware_handler.input_queue.empty():
-            self.hardware_handler.input_queue.get()
+        self.clear_input_queue()
 
         # Wait for call thread to finish
         if self.current_call and self.current_call.is_alive():
