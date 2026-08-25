@@ -9,13 +9,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-try:
-    import pyttsx3
-    _TTS_AVAILABLE = True
-except ImportError:
-    pyttsx3 = None
-    _TTS_AVAILABLE = False
-
 from payphone.config.settings import Config
 from payphone.core import PhoneSystemBase, PhoneTree
 
@@ -41,18 +34,7 @@ class LAMSystem(PhoneSystemBase):
         super().__init__(config)
         self.message_manager = MessageManager(audio_dir=self.config.AUDIO_DIR)
         self.is_recording = False
-
-        if _TTS_AVAILABLE:
-            try:
-                self.tts = pyttsx3.init()
-                self.tts_available = True
-            except Exception as exc:
-                logger.warning("Could not initialize TTS: %s", exc)
-                self.tts = None
-                self.tts_available = False
-        else:
-            self.tts = None
-            self.tts_available = False
+        self._recording_initialized = False
 
     def setup_phone_tree(self) -> PhoneTree:
         """Build the Leave a Message menu."""
@@ -80,29 +62,20 @@ class LAMSystem(PhoneSystemBase):
         self.phone_tree = main_menu
         return main_menu
 
-    def say(self, text: str, blocking: bool = True) -> None:
-        """Speak text with TTS when available."""
-        if not self.tts_available:
-            logger.info("TTS unavailable: %s", text)
-            return
+    def _ensure_recording_initialized(self) -> bool:
+        """Initialize the recording input device once before recording."""
+        if getattr(self, "_recording_initialized", False):
+            return True
 
         try:
-            self.tts.say(text)
-            if blocking:
-                self.tts.runAndWait()
+            record.init()
         except Exception as exc:
-            logger.error("TTS error: %s", exc)
+            logger.error("LAM recording initialization error: %s", exc)
+            self.say("Sorry, recording is not available right now.", blocking=True)
+            return False
 
-    def clear_input_queue(self) -> int:
-        """Remove pending keypad events before recording or browsing."""
-        cleared_count = 0
-        while not self.hardware_handler.input_queue.empty():
-            try:
-                self.hardware_handler.input_queue.get_nowait()
-                cleared_count += 1
-            except queue.Empty:
-                break
-        return cleared_count
+        self._recording_initialized = True
+        return True
 
     def start_message_exchange(self) -> bool:
         """Play the pickup flow: intro, random message, then menu instructions."""
@@ -155,6 +128,8 @@ class LAMSystem(PhoneSystemBase):
         """Record a message. Pound saves, star restarts, zero cancels."""
         logger.info("Entering LAM recording mode")
         self.clear_input_queue()
+        if not self._ensure_recording_initialized():
+            return True
 
         while True:
             filename = self.message_manager.filename_for_next()

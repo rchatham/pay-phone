@@ -49,6 +49,7 @@ def build_lam_system(tmp_path):
     system.phone_on_hook = False
     system.message_manager = MessageManager(audio_dir=str(tmp_path / "audio_files"))
     system.is_recording = False
+    system._recording_initialized = True
     system.tts_available = False
     system.say = Mock()
     return system
@@ -132,6 +133,41 @@ def test_browse_messages_returns_to_menu_when_stopped_during_playback(tmp_path):
 
     assert system.audio_handler.stopped is True
     assert system.audio_handler.played_files == [("lam_messages/001.wav", False)]
+
+
+def test_record_message_initializes_recorder_before_first_use(tmp_path, monkeypatch):
+    system = build_lam_system(tmp_path)
+    system._recording_initialized = False
+    system.phone_tree = Mock(options={})
+
+    def start_recording(filename, timeout=60):
+        filename.write_bytes(b"recorded")
+        system.hardware_handler.input_queue.put("#")
+
+    init_recording = Mock()
+    monkeypatch.setattr("plugins.LAM.record.init", init_recording)
+    monkeypatch.setattr("plugins.LAM.record.start_recording", start_recording)
+    monkeypatch.setattr("plugins.LAM.record.stop_recording", Mock())
+
+    assert system.record_message() is True
+
+    init_recording.assert_called_once_with()
+    assert system._recording_initialized is True
+
+
+def test_record_message_reports_initialization_failure(tmp_path, monkeypatch):
+    system = build_lam_system(tmp_path)
+    system._recording_initialized = False
+    init_recording = Mock(side_effect=RuntimeError("no input device"))
+    start_recording = Mock()
+    monkeypatch.setattr("plugins.LAM.record.init", init_recording)
+    monkeypatch.setattr("plugins.LAM.record.start_recording", start_recording)
+
+    assert system.record_message() is True
+
+    init_recording.assert_called_once_with()
+    start_recording.assert_not_called()
+    system.say.assert_called_with("Sorry, recording is not available right now.", blocking=True)
 
 
 def test_record_message_saves_on_pound(tmp_path, monkeypatch):
