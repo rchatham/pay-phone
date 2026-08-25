@@ -505,37 +505,6 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
     return bios_menu
 
 
-def discover_bios_system_labels():
-    """Return stable BIOS simulator labels without importing plugin code."""
-    label_by_id = {
-        "information_booth": "InformationBoothSystem",
-        "TDTM": "TDTM System",
-        "bm-info-line": "Burning Man Info Line",
-    }
-    available_ids = []
-
-    for parent in (Path("phone_systems"), Path("plugins")):
-        if not parent.exists():
-            continue
-        for child in parent.iterdir():
-            if child.is_dir() and (child / "system.py").exists():
-                available_ids.append(child.name)
-
-    ordered_ids = []
-    for preferred_id in ("information_booth", "TDTM"):
-        if preferred_id in available_ids:
-            ordered_ids.append(preferred_id)
-
-    for system_id in available_ids:
-        if system_id not in ordered_ids:
-            ordered_ids.append(system_id)
-
-    return {
-        str(index): label_by_id.get(system_id, system_id.replace("-", " ").replace("_", " ").title())
-        for index, system_id in enumerate(ordered_ids[:9], start=1)
-    }
-
-
 def main():
     """Run the phone tree simulator"""
     print("\n" + "="*60)
@@ -558,9 +527,6 @@ def main():
     if use_bios:
         print("BIOS MODE - System Selection Menu")
         print("="*60)
-        print("\nAvailable systems:")
-        for digit, label in discover_bios_system_labels().items():
-            print(f"  Press '{digit}' for {label}")
         print("\n  Note: This is a simulated BIOS menu.")
         print("  On real hardware, picking up the handset opens the BIOS menu by default.")
     elif use_hybrid:
@@ -620,6 +586,9 @@ def main():
     # Setup phone tree based on mode
     if use_bios:
         phone_tree = setup_bios_phone_tree(audio_player)
+        print("\nAvailable systems:")
+        for digit, label in getattr(phone_tree, "_system_labels", {}).items():
+            print(f"  Press '{digit}' for {label}")
     elif use_hybrid:
         phone_tree = setup_hybrid_phone_tree(audio_player)
     elif use_extensions:
