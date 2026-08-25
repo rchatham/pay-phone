@@ -19,6 +19,7 @@ class FakeAudioHandler:
         self.played = []
         self.stopped = 0
         self.playing = False
+        self.playing_checks = 0
 
     def play_file(self, filename: str, blocking: bool = True) -> bool:
         self.played.append((filename, blocking))
@@ -30,6 +31,7 @@ class FakeAudioHandler:
         self.playing = False
 
     def is_playing(self) -> bool:
+        self.playing_checks += 1
         return self.playing
 
 
@@ -86,6 +88,39 @@ def test_children_can_return_to_current_menu() -> None:
 
     assert child.call_args is not None
     assert child.call_args[2] is menu
+
+
+def test_hybrid_root_return_key_does_not_recurse() -> None:
+    audio = FakeAudioHandler()
+    action = Mock(return_value=True)
+    menu = PhoneTree(
+        "",
+        audio_handler=audio,
+        action=action,
+        options={"1": FakeOption()},
+        hybrid_mode=True,
+        return_to_menu_key="0",
+    )
+    inputs = Queue()
+    inputs.put("0")
+
+    menu.navigate(inputs, lambda: True, menu)
+
+    action.assert_called_once_with()
+
+
+def test_root_timeout_replays_prompt_without_recursing() -> None:
+    audio = FakeAudioHandler()
+    menu = PhoneTree("menu.wav", audio_handler=audio, options={"1": FakeOption()}, timeout=0)
+    hook_states = iter([True, True, False])
+
+    menu.navigate(Queue(), lambda: next(hook_states, False), menu)
+
+    assert audio.played == [
+        ("menu.wav", False),
+        ("prompts/timeout.mp3", True),
+        ("menu.wav", False),
+    ]
 
 
 def test_return_to_main_node_navigates_without_subclass() -> None:

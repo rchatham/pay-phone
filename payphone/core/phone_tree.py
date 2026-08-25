@@ -292,7 +292,7 @@ class PhoneTree:
 
             continue_nav = self.action()
             if not continue_nav:
-                if main_menu:
+                if main_menu and main_menu is not self:
                     main_menu.navigate(input_queue, hook_status, main_menu)
                 return
 
@@ -355,6 +355,11 @@ class PhoneTree:
                 self.audio_handler.play_file("prompts/timeout.mp3")
                 if main_menu and main_menu is not self:
                     main_menu.navigate(input_queue, hook_status, main_menu)
+                    return
+                if main_menu is self:
+                    self._play_prompt(blocking=False)
+                    start_time = time.time()
+                    continue
                 return
 
             try:
@@ -419,6 +424,11 @@ class PhoneTree:
                 self.audio_handler.play_file("prompts/timeout.mp3")
                 if main_menu and main_menu is not self:
                     main_menu.navigate(input_queue, hook_status, main_menu)
+                    return
+                if main_menu is self:
+                    self._play_prompt(blocking=False)
+                    start_time = time.time()
+                    continue
                 return
 
             # Stop prompt on first keypress to allow silent extension entry
@@ -482,8 +492,10 @@ class PhoneTree:
         while hook_status():
             # Overall timeout check
             if time.time() - start_time > self.timeout:
-                self._handle_timeout(main_menu, input_queue, hook_status)
-                return
+                if self._handle_timeout(main_menu, input_queue, hook_status):
+                    return
+                start_time = time.time()
+                continue
 
             # Poll for input
             try:
@@ -641,19 +653,29 @@ class PhoneTree:
         self._clear_queue(input_queue)
 
         # Navigate to main menu
-        if main_menu:
+        if main_menu and main_menu is not self:
             main_menu.navigate(input_queue, hook_status, main_menu)
 
     def _handle_timeout(self,
                        main_menu: Optional['PhoneTree'],
                        input_queue: queue.Queue,
-                       hook_status: Callable) -> None:
-        """Handle overall timeout"""
+                       hook_status: Callable) -> bool:
+        """Handle overall timeout.
+
+        Returns:
+            bool: True when navigation should return to the caller, False when
+            the current menu should continue waiting for input.
+        """
         logger.info("Timeout reached in hybrid mode")
         self._stop_prompt()
         self.audio_handler.play_file("prompts/timeout.mp3")
         if main_menu and main_menu is not self:
             main_menu.navigate(input_queue, hook_status, main_menu)
+            return True
+        if main_menu is self:
+            self._play_prompt(blocking=False)
+            return False
+        return True
 
     def _is_extension_complete(self, buffer: list, last_digit: str) -> bool:
         """Check if buffered extension is complete"""
