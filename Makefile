@@ -1,4 +1,4 @@
-.PHONY: help venv setup run run-simulator run-simulator-silent ensure-bm-info-line-plugin test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
+.PHONY: help venv setup run run-simulator run-simulator-silent ensure-bm-info-line-plugin ensure-tdtm-plugin-deps test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
 
 # Default target
 .DEFAULT_GOAL := help
@@ -12,7 +12,7 @@ NC := \033[0m # No Color
 # Virtual environment
 VENV_DIR := venv
 PYTHON := $(VENV_DIR)/bin/python3
-PIP := $(VENV_DIR)/bin/pip
+PIP := $(PYTHON) -m pip
 
 ##@ General
 
@@ -59,11 +59,19 @@ ensure-bm-info-line-plugin: ## Link sibling bm-info-line plugin into BIOS plugin
 		fi; \
 	fi
 
-run-simulator: venv ensure-bm-info-line-plugin ## Run interactive BIOS simulator
+ensure-tdtm-plugin-deps: venv ## Install local TDTM plugin dependencies needed for BIOS discovery
+	@if [ -e plugins/TDTM ]; then \
+		if ! $(PYTHON) -c "import filelock" >/dev/null 2>&1; then \
+			echo "$(BLUE)Installing TDTM plugin dependency: filelock...$(NC)"; \
+			$(PIP) install "filelock>=3.12.0"; \
+		fi; \
+	fi
+
+run-simulator: venv ensure-bm-info-line-plugin ensure-tdtm-plugin-deps ## Run interactive BIOS simulator
 	@echo "$(BLUE)Starting BIOS simulator...$(NC)"
 	$(PYTHON) test_phone_tree.py
 
-run-simulator-silent: venv ensure-bm-info-line-plugin ## Run BIOS simulator in silent mode (no audio)
+run-simulator-silent: venv ensure-bm-info-line-plugin ensure-tdtm-plugin-deps ## Run BIOS simulator in silent mode (no audio)
 	@echo "$(BLUE)Starting BIOS simulator (silent)...$(NC)"
 	echo "4\ny" | $(PYTHON) test_phone_tree.py
 
