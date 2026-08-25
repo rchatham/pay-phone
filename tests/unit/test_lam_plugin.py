@@ -85,9 +85,12 @@ def test_start_message_exchange_plays_random_message_and_announces_menu(tmp_path
 
     assert system.start_message_exchange() is True
 
-    assert system.audio_handler.played_files == [("lam_messages/001.wav", True)]
-    assert system.say.call_count == 2
-    assert "three digit message number" in system.say.call_args_list[-1].args[0]
+    assert system.audio_handler.played_files == [
+        ("lam/intro.mp3", True),
+        ("lam_messages/001.wav", True),
+        ("lam/menu.mp3", True),
+    ]
+    system.say.assert_not_called()
 
 
 def test_setup_phone_tree_registers_message_extensions(tmp_path):
@@ -107,7 +110,10 @@ def test_play_extension_plays_specific_message(tmp_path):
 
     assert system.play_extension("001") is True
 
-    assert system.audio_handler.played_files == [("lam_messages/001.wav", True)]
+    assert system.audio_handler.played_files == [
+        ("lam/playing_message.mp3", True),
+        ("lam_messages/001.wav", True),
+    ]
 
 
 def test_browse_messages_plays_chronological_playlist(tmp_path):
@@ -118,8 +124,10 @@ def test_browse_messages_plays_chronological_playlist(tmp_path):
     assert system.browse_messages() is True
 
     assert system.audio_handler.played_files == [
+        ("lam/browse_intro.mp3", True),
         ("lam_messages/001.wav", False),
         ("lam_messages/002.wav", False),
+        ("lam/end_of_messages.mp3", True),
     ]
 
 
@@ -132,7 +140,11 @@ def test_browse_messages_returns_to_menu_when_stopped_during_playback(tmp_path):
     assert system.browse_messages() is True
 
     assert system.audio_handler.stopped is True
-    assert system.audio_handler.played_files == [("lam_messages/001.wav", False)]
+    assert system.audio_handler.played_files == [
+        ("lam/browse_intro.mp3", True),
+        ("lam_messages/001.wav", False),
+        ("lam/returning_to_menu.mp3", True),
+    ]
 
 
 def test_record_message_initializes_recorder_before_first_use(tmp_path, monkeypatch):
@@ -167,7 +179,7 @@ def test_record_message_reports_initialization_failure(tmp_path, monkeypatch):
 
     init_recording.assert_called_once_with()
     start_recording.assert_not_called()
-    system.say.assert_called_with("Sorry, recording is not available right now.", blocking=True)
+    assert system.audio_handler.played_files == [("lam/recording_unavailable.mp3", True)]
 
 
 def test_record_message_saves_on_pound(tmp_path, monkeypatch):

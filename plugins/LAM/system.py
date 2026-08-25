@@ -18,6 +18,39 @@ from .message_manager import MessageManager
 logger = logging.getLogger(__name__)
 
 
+LAM_PROMPTS = {
+    "intro": ("lam/intro.mp3", "Leave a message. First, listen to someone who came before you."),
+    "menu": (
+        "lam/menu.mp3",
+        "Press one to leave a message for the next person. "
+        "Press two to listen to past messages from the burn. "
+        "Dial star, then a three digit message number, then pound to hear a specific message. "
+        "Press zero to return to the system menu.",
+    ),
+    "no_messages": ("lam/no_messages.mp3", "No one has left a message yet. You can be the first."),
+    "no_past_messages": ("lam/no_past_messages.mp3", "There are no past messages yet."),
+    "browse_intro": (
+        "lam/browse_intro.mp3",
+        "Playing all past messages in the order they were left. Press zero to stop.",
+    ),
+    "returning_to_menu": ("lam/returning_to_menu.mp3", "Returning to the menu."),
+    "end_of_messages": ("lam/end_of_messages.mp3", "End of messages."),
+    "record_prompt": ("lam/record_prompt.mp3", "Record your message after the beep."),
+    "record_controls": ("lam/record_controls.mp3", "Press pound to save, star to re-record, or zero to cancel."),
+    "recording_unavailable": ("lam/recording_unavailable.mp3", "Sorry, recording is not available right now."),
+    "saved_as_message": ("lam/saved_as_message.mp3", "Thank you. Your message has been saved as message."),
+    "time_up_saved_as_message": (
+        "lam/time_up_saved_as_message.mp3",
+        "Time is up. Your message has been saved as message.",
+    ),
+    "recording_again": ("lam/recording_again.mp3", "Recording again."),
+    "recording_cancelled": ("lam/recording_cancelled.mp3", "Recording cancelled."),
+    "recording_error": ("lam/recording_error.mp3", "Sorry, there was an error recording your message."),
+    "message_not_found": ("lam/message_not_found.mp3", "Sorry, that message does not exist."),
+    "playing_message": ("lam/playing_message.mp3", "Playing message."),
+}
+
+
 class LAMSystem(PhoneSystemBase):
     """Leave a Message: hear a stranger, leave one for the next caller."""
 
@@ -71,30 +104,31 @@ class LAMSystem(PhoneSystemBase):
             record.init()
         except Exception as exc:
             logger.error("LAM recording initialization error: %s", exc)
-            self.say("Sorry, recording is not available right now.", blocking=True)
+            self._play_prompt("recording_unavailable")
             return False
 
         self._recording_initialized = True
         return True
 
+    def _play_prompt(self, prompt_key: str) -> None:
+        """Play a generated LAM prompt, falling back to runtime TTS."""
+        audio_file, fallback_text = LAM_PROMPTS[prompt_key]
+        if self.audio_handler.play_file(audio_file, blocking=True):
+            return
+        self.say(fallback_text, blocking=True)
+
     def start_message_exchange(self) -> bool:
         """Play the pickup flow: intro, random message, then menu instructions."""
-        self.say("Leave a message. First, listen to someone who came before you.", blocking=True)
+        self._play_prompt("intro")
         self.play_random_message()
-        self.say(
-            "Press one to leave a message for the next person. "
-            "Press two to listen to past messages from the burn. "
-            "Dial star, then a three digit message number, then pound to hear a specific message. "
-            "Press zero to return to the system menu.",
-            blocking=True,
-        )
+        self._play_prompt("menu")
         return True
 
     def play_random_message(self) -> bool:
         """Play a random saved message, if one exists."""
         message = self.message_manager.get_random()
         if message is None:
-            self.say("No one has left a message yet. You can be the first.", blocking=True)
+            self._play_prompt("no_messages")
             return True
 
         logger.info("Playing random LAM message: %s", message)
@@ -106,10 +140,10 @@ class LAMSystem(PhoneSystemBase):
         self.clear_input_queue()
         messages = self.message_manager.list_all()
         if not messages:
-            self.say("There are no past messages yet.", blocking=True)
+            self._play_prompt("no_past_messages")
             return True
 
-        self.say("Playing all past messages in the order they were left. Press zero to stop.", blocking=True)
+        self._play_prompt("browse_intro")
         for index, message in enumerate(messages, start=1):
             if self.phone_on_hook:
                 return True
@@ -118,10 +152,10 @@ class LAMSystem(PhoneSystemBase):
             interrupted = self._play_message(message, interruptible=True)
 
             if interrupted:
-                self.say("Returning to the menu.", blocking=True)
+                self._play_prompt("returning_to_menu")
                 return True
 
-        self.say("End of messages.", blocking=True)
+        self._play_prompt("end_of_messages")
         return True
 
     def record_message(self) -> bool:
@@ -133,8 +167,8 @@ class LAMSystem(PhoneSystemBase):
 
         while True:
             filename = self.message_manager.filename_for_next()
-            self.say("Record your message after the beep.", blocking=True)
-            self.say("Press pound to save, star to re-record, or zero to cancel.", blocking=True)
+            self._play_prompt("record_prompt")
+            self._play_prompt("record_controls")
             self.audio_handler.play_dtmf_tone("#")
 
             try:
@@ -159,10 +193,8 @@ class LAMSystem(PhoneSystemBase):
                         self.is_recording = False
                         extension = filename.stem
                         self._register_extension(extension, filename)
-                        self.say(
-                            f"Thank you. Your message has been saved as message {extension}.",
-                            blocking=True,
-                        )
+                        self._play_prompt("saved_as_message")
+                        self.say(extension, blocking=True)
                         logger.info("LAM recording saved: %s", filename)
                         return True
 
@@ -170,7 +202,7 @@ class LAMSystem(PhoneSystemBase):
                         record.stop_recording()
                         self.is_recording = False
                         self.message_manager.delete_file(filename)
-                        self.say("Recording again.", blocking=True)
+                        self._play_prompt("recording_again")
                         self.clear_input_queue()
                         break
 
@@ -178,14 +210,15 @@ class LAMSystem(PhoneSystemBase):
                         record.stop_recording()
                         self.is_recording = False
                         self.message_manager.delete_file(filename)
-                        self.say("Recording cancelled.", blocking=True)
+                        self._play_prompt("recording_cancelled")
                         return True
                 else:
                     record.stop_recording()
                     self.is_recording = False
                     extension = filename.stem
                     self._register_extension(extension, filename)
-                    self.say(f"Time is up. Your message has been saved as message {extension}.", blocking=True)
+                    self._play_prompt("time_up_saved_as_message")
+                    self.say(extension, blocking=True)
                     logger.info("LAM recording auto-saved after timeout: %s", filename)
                     return True
 
@@ -197,17 +230,18 @@ class LAMSystem(PhoneSystemBase):
                 except Exception:
                     pass
                 self.message_manager.delete_file(filename)
-                self.say("Sorry, there was an error recording your message.", blocking=True)
+                self._play_prompt("recording_error")
                 return True
 
     def play_extension(self, extension: str) -> bool:
         """Play a specific message extension."""
         message = self.message_manager.messages_dir / f"{extension}.wav"
         if not message.exists():
-            self.say("Sorry, that message does not exist.", blocking=True)
+            self._play_prompt("message_not_found")
             return True
 
-        self.say(f"Playing message {extension}.", blocking=True)
+        self._play_prompt("playing_message")
+        self.say(extension, blocking=True)
         self._play_message(message)
         return True
 
