@@ -9,8 +9,8 @@ QUESTIONS_PER_ROUND = 5
 
 TRIVIA_INTRO_TEXT = (
     "Welcome to Burning Man trivia. I will ask multiple choice questions about "
-    "Black Rock City history and culture. After each question, press the number "
-    "of your answer, then press pound. Press pound alone to end the game."
+    "Black Rock City history and culture. Press the number of your answer. "
+    "Your answer is submitted immediately. Press pound to end the game."
 )
 
 
@@ -40,7 +40,7 @@ class TriviaQuestion:
         lines = [f"Question {number}. {self.prompt}"]
         for index, choice in enumerate(self.choices, start=1):
             lines.append(f"Press {index} for {choice}.")
-        lines.append("Then press pound.")
+        lines.append("Press your answer now.")
         return " ".join(lines)
 
     def spoken_answer(self, correct: bool) -> str:
