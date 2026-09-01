@@ -51,23 +51,21 @@ def run_simulation():
     print()
 
     # ===================================================================
-    # SCENARIO 1: Navigate to Information Booth, then into Info submenu
+    # SCENARIO 1: Navigate to the first discovered system
     # ===================================================================
     print("="*70)
-    print("SCENARIO 1: Navigate to Information Booth System")
+    print("SCENARIO 1: Navigate to first discovered system")
     print("="*70)
     print("\nSimulation:")
     print("  1. BIOS menu plays")
-    print("  2. User presses '1' (Information Booth)")
-    print("  3. Information Booth main menu plays")
-    print("  4. User presses '1' (Information submenu)")
-    print("  5. Information submenu plays")
+    print("  2. User presses '1' (first discovered system)")
+    print("  3. Selected system launches")
     print()
 
     input_queue = queue.Queue()
 
     # Prepare inputs
-    keys_to_press = ['1', '1']  # Select system 1, then option 1 within it
+    keys_to_press = ['1']  # Select system 1
 
     print("Starting navigation with simulated keypresses...")
     print("-" * 70)
@@ -143,9 +141,8 @@ def run_simulation():
     print("\n✅ BIOS simulation complete!")
     print("\nWhat you should see:")
     print("  - BIOS menu plays first")
-    print("  - Pressing '1' navigates to Information Booth system")
-    print("  - Information Booth has its own multi-level menu")
-    print("  - Pressing '2' navigates to TDTM system")
+    print("  - Pressing '1' navigates to the first discovered system")
+    print("  - Pressing '2' navigates to the second discovered system, if present")
     print("\nOn real hardware (Raspberry Pi):")
     print("  - Hold hook for 3 seconds → BIOS menu")
     print("  - Press * for 5 seconds → Return to BIOS")

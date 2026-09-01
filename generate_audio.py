@@ -51,7 +51,7 @@ AUDIO_FILES: dict[str, AudioPrompt] = {
         "voice": "alloy",
     },
 
-    # Information Booth demo menus
+    # Information Booth example menus
     "menu/main_menu.mp3": {
         "text": "Welcome to the payphone menu system. Press 1 for information services. Press 2 to hear a joke. Press 3 for music.",
         "voice": "nova",
@@ -266,25 +266,41 @@ def generate_audio_file(filepath: Path, text: str, provider: Literal["openai", "
     print(f"  ✓ Saved to {filepath}")
 
 
+def _ordered_bios_systems(systems):
+    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-info-line", "bm-trivia"))}
+    return sorted(systems.items(), key=lambda item: (priority.get(item[0], len(priority)), item[1].name))
+
+
 def discover_bios_prompts() -> dict[str, AudioPrompt]:
+    from types import SimpleNamespace
+
     from payphone.bios.system_manager import SystemManager
 
     manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
     systems = manager.discover_systems()
+    if "TDTM" not in systems and Path("plugins/TDTM").exists():
+        systems["TDTM"] = SimpleNamespace(name="Talk Dirty To Me")
+    ordered_systems = _ordered_bios_systems(systems)
     prompts: dict[str, AudioPrompt] = {}
 
-    if systems:
-        menu_parts = ["Welcome to payphone BIOS."]
-        for idx, info in enumerate(systems.values(), start=1):
+    if ordered_systems:
+        menu_parts = [
+            "Welcome home. You have reached the Black Rock City payphone switchboard."
+        ]
+        for idx, (_, info) in enumerate(ordered_systems, start=1):
             menu_parts.append(f"Press {idx} for {info.name}.")
+        menu_parts.append("Stay dusty, and leave no trace.")
         prompts["bios/main_menu.mp3"] = {"text": " ".join(menu_parts), "voice": "nova"}
     else:
         prompts["bios/main_menu.mp3"] = {
-            "text": "Welcome to payphone BIOS. No phone systems found. Please check configuration.",
+            "text": (
+                "Welcome home. You have reached the Black Rock City payphone switchboard. "
+                "No camps, art cars, or phone systems are on the line yet. Please check configuration."
+            ),
             "voice": "nova",
         }
 
-    for system_id, info in systems.items():
+    for system_id, info in ordered_systems:
         prompts[f"bios/system_{system_id}.mp3"] = {
             "text": info.name,
             "voice": "shimmer",
