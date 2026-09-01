@@ -8,7 +8,7 @@ import time
 from payphone.core.phone_tree import PhoneTree
 from payphone.core.system import PhoneSystemBase
 
-from .bm_trivia import QUESTIONS_PER_ROUND, TRIVIA_INTRO_TEXT, TriviaGame, score_summary
+from .bm_trivia import CURATED_QUESTIONS, QUESTIONS_PER_ROUND, TRIVIA_INTRO_TEXT, TriviaGame, TriviaQuestion, score_summary
 
 
 class BMTriviaSystem(PhoneSystemBase):
@@ -34,56 +34,94 @@ class BMTriviaSystem(PhoneSystemBase):
             "",
             audio_handler=self.audio_handler,
             action=self._play_trivia_game,
-            speech_text=TRIVIA_INTRO_TEXT,
-            speech_handler=self,
             timeout=300,
         )
 
     def _play_trivia_game(self) -> bool:
         """Run one round of trivia over DTMF."""
+        self._play_audio("bm-trivia/intro.mp3", TRIVIA_INTRO_TEXT, blocking=True)
+
         questions = self.trivia.build_round(QUESTIONS_PER_ROUND)
         if not questions:
-            self.say("No trivia questions are available right now. Returning to the BIOS switchboard.", blocking=True)
+            self._play_audio(
+                "bm-trivia/no_questions.mp3",
+                "No trivia questions are available right now. Returning to the BIOS switchboard.",
+                blocking=True,
+            )
             return True
 
         score = 0
         asked = 0
         for number, question in enumerate(questions, start=1):
-            self.say(question.spoken_question(number), blocking=True)
-            digits = self._collect_digits(timeout=20)
+            self.clear_input_queue()
+            digits = self._ask_question(question, number, timeout=20)
             if not digits:
-                self.say("No answer was entered. Ending the trivia game.", blocking=True)
+                self._play_audio(
+                    "bm-trivia/no_answer.mp3",
+                    "No answer was entered. Ending the trivia game.",
+                    blocking=True,
+                )
                 break
             asked += 1
             correct = question.is_correct(digits)
             if correct:
                 score += 1
-            self.say(question.spoken_answer(correct), blocking=True)
+            self._play_answer(question, correct)
 
-        self.say(score_summary(score, asked), blocking=True)
+        self._play_audio(f"bm-trivia/score_{score}_of_{asked}.mp3", score_summary(score, asked), blocking=True)
         return True
 
-    def _collect_digits(self, timeout: float = 10.0) -> str:
-        """Collect DTMF digits until pound, star clear, or timeout."""
+    def _ask_question(self, question: TriviaQuestion, number: int, timeout: float) -> str:
+        """Play a question and return the first answer digit immediately."""
+        question_number = CURATED_QUESTIONS.index(question) + 1
+        return self._collect_answer(
+            f"bm-trivia/question_{question_number:02d}_round_{number}.mp3",
+            question.spoken_question(number),
+            valid_digits={str(index) for index in range(1, len(question.choices) + 1)},
+            timeout=timeout,
+        )
+
+    def _play_answer(self, question: TriviaQuestion, correct: bool) -> None:
+        """Play the generated answer result for a trivia question."""
+        question_number = CURATED_QUESTIONS.index(question) + 1
+        suffix = "correct" if correct else "wrong"
+        self._play_audio(
+            f"bm-trivia/answer_{question_number:02d}_{suffix}.mp3",
+            question.spoken_answer(correct),
+            blocking=True,
+        )
+
+    def _collect_answer(self, audio_file: str, fallback_text: str, valid_digits: set[str], timeout: float) -> str:
+        """Collect the first valid answer digit, interrupting question audio immediately."""
         input_queue = getattr(getattr(self, "hardware_handler", None), "input_queue", None)
         if input_queue is None:
+            self._play_audio(audio_file, fallback_text, blocking=True)
             return ""
 
+        self._play_audio(audio_file, fallback_text, blocking=False)
         deadline = time.time() + timeout
-        digits: list[str] = []
         while time.time() < deadline:
             try:
                 digit = input_queue.get(timeout=0.1)
             except queue.Empty:
                 continue
+            if digit in valid_digits:
+                self.audio_handler.stop()
+                return digit
             if digit == "#":
-                break
+                self.audio_handler.stop()
+                return ""
             if digit == "*":
-                digits.clear()
+                self.audio_handler.stop()
                 continue
-            if digit in "0123456789":
-                digits.append(digit)
-        return "".join(digits)
+        self.audio_handler.stop()
+        return ""
+
+    def _play_audio(self, audio_file: str, fallback_text: str, blocking: bool) -> None:
+        """Play generated audio, falling back to live TTS when the file is missing."""
+        if self.audio_handler.play_file(audio_file, blocking=blocking):
+            return
+        self.say(fallback_text, blocking=blocking)
 
     def stop_speech(self) -> None:
         """Speech interruption hook used by PhoneTree."""
