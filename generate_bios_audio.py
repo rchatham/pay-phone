@@ -97,7 +97,7 @@ def main():
     print()
 
     # Generate main menu
-    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-info-line", "bm-trivia"))}
+    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
     ordered_systems = sorted(systems.items(), key=lambda item: (priority.get(item[0], len(priority)), item[1].name))
     if ordered_systems:
         menu_text = "Welcome home. You have reached the Black Rock City payphone switchboard. "

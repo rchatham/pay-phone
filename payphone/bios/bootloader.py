@@ -264,7 +264,7 @@ class BIOSBootloader(PhoneSystemBase):
 
         # Build menu options with stable event-facing ordering.
         menu_options = {}
-        priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-info-line", "bm-trivia"))}
+        priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
         ordered_systems = sorted(systems, key=lambda system: (priority.get(system.id, len(priority)), system.name))
         for idx, system in enumerate(ordered_systems, start=1):
             if idx > 9:

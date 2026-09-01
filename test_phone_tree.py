@@ -340,7 +340,7 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
         ordered_systems.append(("TDTM", SimpleNamespace(name="TDTM System")))
         added_system_ids.add("TDTM")
 
-    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-info-line", "bm-trivia"))}
+    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
     remaining_systems = sorted(
         ((system_id, system_info) for system_id, system_info in systems.items() if system_id not in added_system_ids),
         key=lambda item: (priority.get(item[0], len(priority)), item[1].name),

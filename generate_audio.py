@@ -365,7 +365,7 @@ def generate_audio_file(
 
 
 def _ordered_bios_systems(systems):
-    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-info-line", "bm-trivia"))}
+    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
     return sorted(systems.items(), key=lambda item: (priority.get(item[0], len(priority)), item[1].name))
 
 
