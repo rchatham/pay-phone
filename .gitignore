@@ -69,8 +69,12 @@ plugins/*
 !plugins/.gitkeep
 !plugins/LAM/
 !plugins/LAM/**
+!plugins/bm-trivia/
+!plugins/bm-trivia/**
 plugins/LAM/__pycache__/
 plugins/LAM/**/*.pyc
+plugins/bm-trivia/__pycache__/
+plugins/bm-trivia/**/*.pyc
 
 # Claude Code configuration
 .claude/
