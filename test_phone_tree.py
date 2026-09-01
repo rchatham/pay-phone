@@ -512,20 +512,27 @@ def main():
     print("  2. Extension phone tree (multi-digit extensions)")
     print("  3. Hybrid mode (single-digit + * prefix extensions)")
     print("  4. BIOS mode (system selection menu)")
+    print("  5. Raspberry Pi BIOS mode (audio, no setup prompts)")
     print("="*60)
 
     # Get mode selection
-    mode = input("\nEnter mode (1, 2, 3, or 4, default=1): ").strip()
+    mode = input("\nEnter mode (1, 2, 3, 4, or 5, default=1): ").strip()
     use_extensions = (mode == "2")
     use_hybrid = (mode == "3")
-    use_bios = (mode == "4")
+    use_pi_bios = (mode == "5")
+    use_bios = (mode == "4" or use_pi_bios)
 
     print("\n" + "="*60)
     if use_bios:
-        print("BIOS MODE - System Selection Menu")
-        print("="*60)
-        print("\n  Note: This is a simulated BIOS menu.")
-        print("  On real hardware, picking up the handset opens the BIOS menu by default.")
+        if use_pi_bios:
+            print("RASPBERRY PI BIOS MODE - Audio System Selection Menu")
+            print("="*60)
+            print("\n  Simulates the Pi deployment path: BIOS only, audio enabled.")
+        else:
+            print("BIOS MODE - System Selection Menu")
+            print("="*60)
+            print("\n  Note: This is a simulated BIOS menu.")
+            print("  On real hardware, picking up the handset opens the BIOS menu by default.")
     elif use_hybrid:
         print("HYBRID MODE - Single-Digit + * Prefix Extensions")
         print("="*60)
@@ -571,9 +578,12 @@ def main():
     print("  - Audio files will play if they exist")
     print("="*60 + "\n")
 
-    # Ask about silent mode
-    silent_input = input("Run in silent mode (no audio)? (y/N): ").strip().lower()
-    silent_mode = (silent_input == 'y')
+    # Ask about silent mode unless Raspberry Pi mode selected audio explicitly.
+    if use_pi_bios:
+        silent_mode = False
+    else:
+        silent_input = input("Run in silent mode (no audio)? (y/N): ").strip().lower()
+        silent_mode = (silent_input == 'y')
 
     # Initialize components
     audio_player = AudioPlayer("audio_files", silent=silent_mode)
