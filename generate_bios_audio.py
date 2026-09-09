@@ -4,8 +4,7 @@ Generate audio files for BIOS menu using text-to-speech.
 
 Creates:
 - bios/main_menu.mp3
-- bios/system_information_booth.mp3
-- bios/system_tdtm.mp3 (if TDTM discovered)
+- bios/system_<id>.mp3 for each discovered system
 - prompts/invalid_extension.mp3
 - prompts/no_systems.mp3
 """
@@ -88,6 +87,9 @@ def main():
     print("Discovering phone systems...")
     manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
     systems = manager.discover_systems()
+    if "TDTM" not in systems and Path("plugins/TDTM").exists():
+        from types import SimpleNamespace
+        systems["TDTM"] = SimpleNamespace(name="Talk Dirty To Me")
 
     print(f"Found {len(systems)} systems:")
     for system_id, info in systems.items():
@@ -95,10 +97,13 @@ def main():
     print()
 
     # Generate main menu
-    if systems:
-        menu_text = "Welcome to payphone BIOS. "
-        for idx, (system_id, info) in enumerate(systems.items(), start=1):
+    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
+    ordered_systems = sorted(systems.items(), key=lambda item: (priority.get(item[0], len(priority)), item[1].name))
+    if ordered_systems:
+        menu_text = "Welcome home. You have reached the Black Rock City payphone switchboard. "
+        for idx, (system_id, info) in enumerate(ordered_systems, start=1):
             menu_text += f"Press {idx} for {info.name}. "
+        menu_text += "Stay dusty, and leave no trace."
 
         generate_audio(
             menu_text,
@@ -107,12 +112,12 @@ def main():
     else:
         print("⚠️  No systems found, generating error message only")
         generate_audio(
-            "No phone systems found. Please check configuration.",
+            "Welcome home. You have reached the Black Rock City payphone switchboard. No phone systems found. Please check configuration.",
             str(audio_dir / "prompts" / "no_systems.mp3")
         )
 
     # Generate individual system audio files
-    for system_id, info in systems.items():
+    for system_id, info in ordered_systems:
         generate_audio(
             info.name,
             str(audio_dir / "bios" / f"system_{system_id}.mp3")

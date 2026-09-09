@@ -48,14 +48,13 @@ def test_with_detailed_logging():
     input_queue = queue.Queue()
 
     print("="*70)
-    print("TEST: Select system 1, then navigate within it")
+    print("TEST: Select system 1")
     print("="*70)
-    print("Inputs: '1' (select Info Booth), then '1' (select Info submenu)")
+    print("Inputs: '1' (select first discovered system)")
     print()
 
     # Add inputs
     input_queue.put('1')  # Select system 1
-    input_queue.put('1')  # Navigate within system
 
     # Track calls
     call_count = [0]
@@ -87,10 +86,8 @@ def test_with_detailed_logging():
     print("\n" + "="*70)
     print("Expected audio sequence:")
     print("  1. bios/main_menu.mp3       (BIOS menu)")
-    print("  2. menu/main_menu.mp3       (Info Booth main menu)")
-    print("  3. menu/info_menu.mp3       (Info submenu)")
-    print("  4. menu/main_menu.mp3       (Back to Info Booth menu)")
-    print("  5. bios/main_menu.mp3       (Back to BIOS after timeout)")
+    print("  2. bios/system_<id>.mp3     (selected system prompt)")
+    print("  3. bios/main_menu.mp3       (Back to BIOS after timeout)")
     print("="*70 + "\n")
 
 if __name__ == "__main__":

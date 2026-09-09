@@ -262,9 +262,11 @@ class BIOSBootloader(PhoneSystemBase):
                 audio_handler=self.audio_handler
             )
 
-        # Build menu options
+        # Build menu options with stable event-facing ordering.
         menu_options = {}
-        for idx, system in enumerate(systems, start=1):
+        priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
+        ordered_systems = sorted(systems, key=lambda system: (priority.get(system.id, len(priority)), system.name))
+        for idx, system in enumerate(ordered_systems, start=1):
             if idx > 9:
                 logger.warning(f"Too many systems (max 9), skipping: {system.name}")
                 break
@@ -278,7 +280,7 @@ class BIOSBootloader(PhoneSystemBase):
             )
 
         # Update config with discovered systems
-        self.bios_config.update_available_systems([s.to_dict() for s in systems])
+        self.bios_config.update_available_systems([s.to_dict() for s in ordered_systems])
 
         # Main BIOS menu
         main_menu = PhoneTree(

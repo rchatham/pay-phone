@@ -1,4 +1,4 @@
-.PHONY: help venv setup run run-simulator run-simulator-silent ensure-bm-info-line-plugin ensure-tdtm-plugin-deps test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
+.PHONY: help venv setup run run-simulator run-simulator-pi run-simulator-silent ensure-bm-info-line-plugin ensure-simulator-deps ensure-tdtm-plugin-deps test test-unit test-integration test-coverage test-watch clean clean-all install deploy ssh sync-secrets pi-status pi-logs pi-restart setup-secrets lint docs quickstart
 
 # Default target
 .DEFAULT_GOAL := help
@@ -59,6 +59,12 @@ ensure-bm-info-line-plugin: ## Link sibling bm-info-line plugin into BIOS plugin
 		fi; \
 	fi
 
+ensure-simulator-deps: venv ## Install local simulator dependencies when missing
+	@if ! $(PYTHON) -c "import pygame" >/dev/null 2>&1; then \
+		echo "$(BLUE)Installing simulator dependencies...$(NC)"; \
+		$(PIP) install -r requirements-dev.txt; \
+	fi
+
 ensure-tdtm-plugin-deps: venv ## Install local TDTM plugin dependencies needed for BIOS discovery
 	@if [ -e plugins/TDTM ]; then \
 		if ! $(PYTHON) -c "import filelock" >/dev/null 2>&1; then \
@@ -67,11 +73,15 @@ ensure-tdtm-plugin-deps: venv ## Install local TDTM plugin dependencies needed f
 		fi; \
 	fi
 
-run-simulator: venv ensure-bm-info-line-plugin ensure-tdtm-plugin-deps ## Run interactive BIOS simulator
+run-simulator: venv ensure-bm-info-line-plugin ensure-simulator-deps ensure-tdtm-plugin-deps ## Run interactive BIOS simulator
 	@echo "$(BLUE)Starting BIOS simulator...$(NC)"
 	$(PYTHON) test_phone_tree.py
 
-run-simulator-silent: venv ensure-bm-info-line-plugin ensure-tdtm-plugin-deps ## Run BIOS simulator in silent mode (no audio)
+run-simulator-pi: venv ensure-bm-info-line-plugin ensure-simulator-deps ensure-tdtm-plugin-deps ## Run Raspberry Pi-style BIOS simulator with audio
+	@echo "$(BLUE)Starting Raspberry Pi-style BIOS simulator...$(NC)"
+	echo "5" | $(PYTHON) test_phone_tree.py
+
+run-simulator-silent: venv ensure-bm-info-line-plugin ensure-simulator-deps ensure-tdtm-plugin-deps ## Run BIOS simulator in silent mode (no audio)
 	@echo "$(BLUE)Starting BIOS simulator (silent)...$(NC)"
 	echo "4\ny" | $(PYTHON) test_phone_tree.py
 

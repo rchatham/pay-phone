@@ -327,25 +327,27 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     logger.info(f"Discovered {len(systems)} systems for BIOS menu")
 
-    # Build menu options by actually loading each system. Keep stable simulator slots:
-    # Information Booth first, TDTM second when its plugin exists, then remaining plugins.
-    # This keeps BM Info Line as an additional option instead of taking TDTM's slot when
-    # local TDTM dependencies are missing.
+    # Build menu options by actually loading each system. Keep a stable TDTM
+    # placeholder slot when its plugin symlink exists but optional dependencies
+    # are missing locally.
     from types import SimpleNamespace
     ordered_systems = []
     added_system_ids = set()
-    for preferred_id in ("information_booth", "TDTM"):
-        if preferred_id in systems:
-            ordered_systems.append((preferred_id, systems[preferred_id]))
-            added_system_ids.add(preferred_id)
-        elif preferred_id == "TDTM" and Path("plugins/TDTM").exists():
-            ordered_systems.append((preferred_id, SimpleNamespace(name="TDTM System")))
-            added_system_ids.add(preferred_id)
+    if "TDTM" in systems:
+        ordered_systems.append(("TDTM", systems["TDTM"]))
+        added_system_ids.add("TDTM")
+    elif Path("plugins/TDTM").exists():
+        ordered_systems.append(("TDTM", SimpleNamespace(name="TDTM System")))
+        added_system_ids.add("TDTM")
 
-    for system_id, system_info in systems.items():
-        if system_id not in added_system_ids:
-            ordered_systems.append((system_id, system_info))
-            added_system_ids.add(system_id)
+    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
+    remaining_systems = sorted(
+        ((system_id, system_info) for system_id, system_info in systems.items() if system_id not in added_system_ids),
+        key=lambda item: (priority.get(item[0], len(priority)), item[1].name),
+    )
+    for system_id, system_info in remaining_systems:
+        ordered_systems.append((system_id, system_info))
+        added_system_ids.add(system_id)
 
     menu_options = {}
     system_labels = {}
@@ -372,12 +374,7 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
             system_tree = None
 
             # Special handling for known systems that we can mock
-            if system_id == "information_booth":
-                # Use the built-in phone tree setup for information booth
-                system_tree = setup_phone_tree(audio_player)
-                logger.info(f"    Loaded phone tree for {system_info.name} (using local setup)")
-
-            elif system_id == "TDTM":
+            if system_id == "TDTM":
                 # TDTM requires special handling - load phone tree without hardware init.
                 # If local dependencies are missing, keep its BIOS slot with a placeholder.
                 if system_class is None:
@@ -515,20 +512,27 @@ def main():
     print("  2. Extension phone tree (multi-digit extensions)")
     print("  3. Hybrid mode (single-digit + * prefix extensions)")
     print("  4. BIOS mode (system selection menu)")
+    print("  5. Raspberry Pi BIOS mode (audio, no setup prompts)")
     print("="*60)
 
     # Get mode selection
-    mode = input("\nEnter mode (1, 2, 3, or 4, default=1): ").strip()
+    mode = input("\nEnter mode (1, 2, 3, 4, or 5, default=1): ").strip()
     use_extensions = (mode == "2")
     use_hybrid = (mode == "3")
-    use_bios = (mode == "4")
+    use_pi_bios = (mode == "5")
+    use_bios = (mode == "4" or use_pi_bios)
 
     print("\n" + "="*60)
     if use_bios:
-        print("BIOS MODE - System Selection Menu")
-        print("="*60)
-        print("\n  Note: This is a simulated BIOS menu.")
-        print("  On real hardware, picking up the handset opens the BIOS menu by default.")
+        if use_pi_bios:
+            print("RASPBERRY PI BIOS MODE - Audio System Selection Menu")
+            print("="*60)
+            print("\n  Simulates the Pi deployment path: BIOS only, audio enabled.")
+        else:
+            print("BIOS MODE - System Selection Menu")
+            print("="*60)
+            print("\n  Note: This is a simulated BIOS menu.")
+            print("  On real hardware, picking up the handset opens the BIOS menu by default.")
     elif use_hybrid:
         print("HYBRID MODE - Single-Digit + * Prefix Extensions")
         print("="*60)
@@ -574,9 +578,12 @@ def main():
     print("  - Audio files will play if they exist")
     print("="*60 + "\n")
 
-    # Ask about silent mode
-    silent_input = input("Run in silent mode (no audio)? (y/N): ").strip().lower()
-    silent_mode = (silent_input == 'y')
+    # Ask about silent mode unless Raspberry Pi mode selected audio explicitly.
+    if use_pi_bios:
+        silent_mode = False
+    else:
+        silent_input = input("Run in silent mode (no audio)? (y/N): ").strip().lower()
+        silent_mode = (silent_input == 'y')
 
     # Initialize components
     audio_player = AudioPlayer("audio_files", silent=silent_mode)
