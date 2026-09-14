@@ -40,6 +40,8 @@ class BMTriviaSystem(PhoneSystemBase):
     def _play_trivia_game(self) -> bool:
         """Run one round of trivia over DTMF."""
         self._play_audio("bm-trivia/intro.mp3", TRIVIA_INTRO_TEXT, blocking=True)
+        if not self.running:
+            return True
 
         questions = self.trivia.build_round(QUESTIONS_PER_ROUND)
         if not questions:
@@ -53,8 +55,12 @@ class BMTriviaSystem(PhoneSystemBase):
         score = 0
         asked = 0
         for number, question in enumerate(questions, start=1):
+            if not self.running:
+                break
             self.clear_input_queue()
             digits = self._ask_question(question, number, timeout=20)
+            if not self.running:
+                break
             if not digits:
                 self._play_audio(
                     "bm-trivia/no_answer.mp3",
@@ -68,6 +74,8 @@ class BMTriviaSystem(PhoneSystemBase):
                 score += 1
             self._play_answer(question, correct)
 
+        if not self.running:
+            return True
         self._play_audio(f"bm-trivia/score_{score}_of_{asked}.mp3", score_summary(score, asked), blocking=True)
         return True
 
@@ -92,15 +100,24 @@ class BMTriviaSystem(PhoneSystemBase):
         )
 
     def _collect_answer(self, audio_file: str, fallback_text: str, valid_digits: set[str], timeout: float) -> str:
-        """Collect the first valid answer digit, interrupting question audio immediately."""
+        """Collect the first valid answer digit.
+
+        DTMF may arrive while the question is still playing and immediately
+        interrupts playback. The no-answer timeout only starts after the
+        question finishes playing, so longer questions are not cut off before
+        the caller has heard every choice. The loop also exits early when the
+        call is cancelled (``self.running`` is cleared by the BIOS bootloader
+        on hang-up).
+        """
         input_queue = getattr(getattr(self, "hardware_handler", None), "input_queue", None)
         if input_queue is None:
             self._play_audio(audio_file, fallback_text, blocking=True)
             return ""
 
         self._play_audio(audio_file, fallback_text, blocking=False)
-        deadline = time.time() + timeout
-        while time.time() < deadline:
+
+        # Accept answers while the question plays; interrupt on first valid digit.
+        while self._is_audio_playing() and self.running:
             try:
                 digit = input_queue.get(timeout=0.1)
             except queue.Empty:
@@ -114,8 +131,29 @@ class BMTriviaSystem(PhoneSystemBase):
             if digit == "*":
                 self.audio_handler.stop()
                 continue
-        self.audio_handler.stop()
+
+        if not self.running:
+            self.audio_handler.stop()
+            return ""
+
+        # Question finished playing; wait for an answer with a timeout.
+        deadline = time.time() + timeout
+        while time.time() < deadline and self.running:
+            try:
+                digit = input_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            if digit in valid_digits:
+                return digit
+            if digit == "#":
+                return ""
+            if digit == "*":
+                continue
         return ""
+
+    def _is_audio_playing(self) -> bool:
+        """Return whether the question prompt is currently playing."""
+        return bool(self.audio_handler.is_playing()) if self.audio_handler else False
 
     def _play_audio(self, audio_file: str, fallback_text: str, blocking: bool) -> None:
         """Play generated audio, falling back to live TTS when the file is missing."""
