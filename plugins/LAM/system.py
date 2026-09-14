@@ -100,8 +100,17 @@ class LAMSystem(PhoneSystemBase):
         if getattr(self, "_recording_initialized", False):
             return True
 
+        if not self.config.ENABLE_RECORDING:
+            logger.info("LAM recording is disabled by ENABLE_RECORDING")
+            self._play_prompt("recording_unavailable")
+            return False
+
         try:
-            record.init()
+            record.init(
+                preferred_device=self.config.RECORDING_DEVICE,
+                preferred_samplerate=self.config.RECORDING_SAMPLE_RATE,
+                preferred_channels=self.config.RECORDING_CHANNELS,
+            )
         except Exception as exc:
             logger.error("LAM recording initialization error: %s", exc)
             self._play_prompt("recording_unavailable")
@@ -110,18 +119,18 @@ class LAMSystem(PhoneSystemBase):
         self._recording_initialized = True
         return True
 
-    def _play_prompt(self, prompt_key: str) -> None:
+    def _play_prompt(self, prompt_key: str, blocking: bool = True) -> None:
         """Play a generated LAM prompt, falling back to runtime TTS."""
         audio_file, fallback_text = LAM_PROMPTS[prompt_key]
-        if self.audio_handler.play_file(audio_file, blocking=True):
+        if self.audio_handler.play_file(audio_file, blocking=blocking):
             return
-        self.say(fallback_text, blocking=True)
+        self.say(fallback_text, blocking=blocking)
 
     def start_message_exchange(self) -> bool:
         """Play the pickup flow: intro, random message, then menu instructions."""
         self._play_prompt("intro")
         self.play_random_message()
-        self._play_prompt("menu")
+        self._play_prompt("menu", blocking=False)
         return True
 
     def play_random_message(self) -> bool:
@@ -176,11 +185,13 @@ class LAMSystem(PhoneSystemBase):
                 self.is_recording = True
                 start_time = time.time()
 
-                while time.time() - start_time < 60:
+                max_seconds = self.config.LAM_MAX_RECORD_SECONDS
+                while time.time() - start_time < max_seconds:
                     if self.phone_on_hook:
                         logger.info("Phone hung up during LAM recording")
                         record.stop_recording()
                         self.is_recording = False
+                        self.message_manager.delete_file(filename)
                         return True
 
                     try:

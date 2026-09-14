@@ -1,9 +1,11 @@
 import os
 import json
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env file if it exists
+# Load local development defaults, then deployment settings when present.
 load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / '.env.payphone')
 
 class Config:
     # Hardware mode selection
@@ -34,6 +36,12 @@ class Config:
     # Phone tree settings
     MENU_TIMEOUT = int(os.getenv('MENU_TIMEOUT', '30'))
     
+    # Recording settings
+    RECORDING_DEVICE = os.getenv('RECORDING_DEVICE')
+    RECORDING_SAMPLE_RATE = int(os.getenv('RECORDING_SAMPLE_RATE', '44100'))
+    RECORDING_CHANNELS = int(os.getenv('RECORDING_CHANNELS', '1'))
+    LAM_MAX_RECORD_SECONDS = int(os.getenv('LAM_MAX_RECORD_SECONDS', '60'))
+
     # Features
     ENABLE_RECORDING = os.getenv('ENABLE_RECORDING', 'false').lower() == 'true'
     ENABLE_CELLULAR = os.getenv('ENABLE_CELLULAR', 'false').lower() == 'true'
