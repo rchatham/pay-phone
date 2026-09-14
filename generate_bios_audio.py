@@ -4,8 +4,7 @@ Generate audio files for BIOS menu using text-to-speech.
 
 Creates:
 - bios/main_menu.mp3
-- bios/system_information_booth.mp3
-- bios/system_tdtm.mp3 (if TDTM discovered)
+- bios/system_<id>.mp3 for each discovered system
 - prompts/invalid_extension.mp3
 - prompts/no_systems.mp3
 """
