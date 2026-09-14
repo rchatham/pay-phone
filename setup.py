@@ -47,7 +47,8 @@ setup(
     ],
     extras_require={
         "rpi": ["RPi.GPIO>=0.7.0"],  # Only needed for Raspberry Pi
-        "dev": ["pytest", "black", "flake8"],
+        "recording": ["numpy>=1.19.0", "sounddevice>=0.4.6", "soundfile>=0.12.1"],
+        "dev": ["pytest", "pytest-cov", "black", "flake8"],
     },
     entry_points={
         "console_scripts": [

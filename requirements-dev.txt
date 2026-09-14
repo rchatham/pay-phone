@@ -10,6 +10,8 @@ pytest>=6.0.0
 pytest-cov>=2.10.0
 mock>=4.0.0
 numpy>=1.19.0
+sounddevice>=0.4.6
+soundfile>=0.12.1
 
 # Note: RPi.GPIO is excluded - it only works on Raspberry Pi
 # The codebase handles this gracefully with conditional imports
