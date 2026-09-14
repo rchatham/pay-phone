@@ -9,13 +9,52 @@ Start with a Rasbian Buster Lite base image.
 - `sudo apt-get upgrade`
 - `sudo apt-get install alsa-utils`
 - `sudo apt-get install mpg321`
+- `sudo apt-get install portaudio19-dev libsndfile1`
 
 ### Using Sound on the Pi
 - Type `alsamixer` into the terminal to open the sound preferences.
 - `aplay -l` list audio output devices.
 - `arecord -l` list audio input devices.
-- Test recording on the pi through the usb sound card: 
+- Test recording on the pi through the usb sound card:
    - `arecord --device=hw:0,0 --format S16_LE -V mono --rate 44100 -c1 test.wav`
+   - `aplay test.wav`
+
+### Generating Prompt Audio with Local Qwen3-TTS
+
+The prompt generator can use the same local Qwen3-TTS setup used by `bm-info-line`. Install heavy model dependencies in a dedicated environment, then run `generate_audio.py` with `--provider qwen`:
+
+```bash
+python3 -m pip install -U qwen-tts soundfile torch
+venv/bin/python generate_audio.py \
+  --provider qwen \
+  --qwen-model Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice \
+  --qwen-speaker eric \
+  --qwen-language English
+```
+
+Optional environment defaults: `PAYPHONE_QWEN_TTS_MODEL`, `PAYPHONE_QWEN_TTS_DEVICE`, `PAYPHONE_QWEN_TTS_DTYPE`, `PAYPHONE_QWEN_TTS_SPEAKER`, and `PAYPHONE_QWEN_TTS_LANGUAGE`.
+
+### Leave a Message Recording Setup
+
+LAM recording is gated by `ENABLE_RECORDING`; set it true on deployments that should accept messages.
+
+```bash
+sudo apt-get update
+sudo apt-get install -y portaudio19-dev libsndfile1 alsa-utils
+pip install -r requirements.txt
+arecord -l
+arecord --device=hw:0,0 --format S16_LE -V mono --rate 44100 -c1 test.wav
+aplay test.wav
+ENABLE_RECORDING=true RECORDING_DEVICE=0 python scripts/test_lam_recording.py
+```
+
+`RECORDING_DEVICE` can be unset for the default input device, an integer PortAudio device index, or a case-insensitive name fragment such as `USB` or `Injector`.
+
+For simulator/app testing:
+
+```bash
+ENABLE_RECORDING=true RECORDING_DEVICE=<device> make run-simulator
+```
 
 
 ### Components
