@@ -36,7 +36,7 @@ def trace_navigation():
 
     # Get system 1
     system_1 = bios_menu.options['1']
-    print("System 1 (Information Booth):")
+    print("System 1 (first discovered system):")
     print(f"  Audio: {system_1.audio_file}")
     print(f"  Options: {list(system_1.options.keys()) if system_1.options else 'None'}")
     print()
@@ -101,9 +101,8 @@ def trace_navigation():
     print("EXPECTED AUDIO SEQUENCE:")
     print("="*70)
     print("1. bios/main_menu.mp3       (BIOS menu)")
-    print("2. menu/main_menu.mp3       (Info Booth menu)")
-    print("3. menu/info_menu.mp3       (Info submenu)")
-    print("4. menu/main_menu.mp3       (Back to Info Booth)")
+    print("2. bios/system_<id>.mp3     (selected system prompt)")
+    print("3. <system audio>           (selected system menu/audio)")
     print("="*70 + "\n")
 
 if __name__ == "__main__":
