@@ -41,9 +41,9 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
         ┌───────────┴───────────┐
         │                       │
 ┌───────▼────────┐    ┌────────▼──────────┐
-│ InformationBooth│    │  TDTM System     │
-│ (built-in)      │    │  (external repo) │
-└─────────────────┘    └──────────────────┘
+│   Plugin A     │    │  TDTM System     │
+│ (discovered)   │    │  (external repo) │
+└────────────────┘    └──────────────────┘
 ```
 
 ## Usage
@@ -63,7 +63,7 @@ payphone
 
 ```bash
 # Run specific system directly without BIOS
-PAYPHONE_LEGACY_MODE=information_booth payphone
+PAYPHONE_LEGACY_MODE=<system_id> payphone
 ```
 
 ### Configuration
@@ -72,7 +72,7 @@ Edit `.bios_config.json` in the project root:
 
 ```json
 {
-  "last_system": "information_booth",
+  "last_system": null,
   "auto_launch": false,
   "always_show_menu_on_pickup": true,
   "bios_enter_hold_seconds": 0.0,
@@ -95,6 +95,8 @@ Edit `.bios_config.json` in the project root:
 - `available_systems`: Auto-populated with discovered systems
 
 ## Creating a Phone System
+
+Runnable examples that should not appear in BIOS can live outside the default scan paths, such as `examples/information_booth/`.
 
 To make your phone system discoverable by BIOS:
 
@@ -148,8 +150,7 @@ The BIOS will:
 
 Create these audio files in `audio_files/bios/`:
 
-- `main_menu.mp3` - "Welcome to payphone BIOS. Press 1 for Information Booth, Press 2 for TDTM System..."
-- `system_information_booth.mp3` - "Information Booth System" (spoken name)
+- `main_menu.mp3` - "Welcome to payphone BIOS. Press 1 for TDTM System..."
 - `system_tdtm.mp3` - "TDTM System" (spoken name)
 - `system_<id>.mp3` - Audio for each discovered system
 

@@ -1,10 +1,8 @@
 """
 Phone Systems
 
-Collection of example phone system implementations.
-Each phone system is a subclass of PhoneSystemBase.
+Collection point for built-in phone system implementations discovered by BIOS.
+Each phone system should be a subclass of PhoneSystemBase in its own subdirectory.
 """
 
-from .information_booth import InformationBoothSystem
-
-__all__ = ["InformationBoothSystem"]
+__all__: list[str] = []

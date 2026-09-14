@@ -24,8 +24,7 @@ def demo():
 
     # Create input queue
     input_queue = queue.Queue()
-    input_queue.put('1')  # Select Information Booth
-    input_queue.put('2')  # Within Info Booth, select Jokes
+    input_queue.put('1')  # Select first discovered system
 
     # Hook check that doesn't depend on keyboard.running
     call_count = [0]
@@ -37,15 +36,13 @@ def demo():
         within_limit = call_count[0] < 150
         return has_input or within_limit
 
-    print("Scenario: User selects Info Booth (1), then Jokes (2)")
+    print("Scenario: User selects the first discovered system (1)")
     print("="*70)
     print("\nExpected sequence:")
     print("  1. bios/main_menu.mp3       ← BIOS menu")
-    print("  2. menu/main_menu.mp3       ← Info Booth main menu")
-    print("  3. menu/jokes.mp3           ← Jokes playing")
-    print("  4. menu/main_menu.mp3       ← Back to Info Booth menu")
-    print("  5. [timeout]")
-    print("  6. bios/main_menu.mp3       ← Back to BIOS menu")
+    print("  2. bios/system_<id>.mp3     ← Selected system prompt")
+    print("  3. [system runs or timeout]")
+    print("  4. bios/main_menu.mp3       ← Back to BIOS menu")
     print("\n" + "="*70)
     print("Actual audio playback:\n")
 
@@ -55,9 +52,8 @@ def demo():
     print("\n" + "="*70)
     print(f"✅ DEMONSTRATION COMPLETE ({call_count[0]} iterations)")
     print("="*70)
-    print("\n🎯 KEY POINT: Notice that after jokes.mp3 plays, it returns to")
-    print("   the Info Booth menu (menu/main_menu.mp3), NOT the BIOS menu!")
-    print("\n   This proves the subsystem is running independently.")
+    print("\n🎯 KEY POINT: The selected subsystem runs independently before")
+    print("   control returns to the BIOS menu.")
     print("="*70 + "\n")
 
 if __name__ == "__main__":

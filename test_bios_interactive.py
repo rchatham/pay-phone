@@ -47,7 +47,7 @@ def interactive_test():
     print()
 
     # Step 2: Simulate selecting option 1
-    print("STEP 2: User selects option '1' (Information Booth)")
+    print("STEP 2: User selects option '1' (first discovered system)")
     system_1 = bios_menu.options['1']
     print(f"  → System 1 audio file: {system_1.audio_file}")
     print(f"  → System 1 has {len(system_1.options) if system_1.options else 0} options")
@@ -55,7 +55,7 @@ def interactive_test():
         print(f"  → System 1 options: {list(system_1.options.keys())}")
     print()
 
-    print("  Playing Information Booth menu...")
+    print("  Playing selected system prompt/menu...")
     audio.play_file(system_1.audio_file, blocking=False)
     input("  → Audio should be playing. Press Enter when done...")
     audio.stop()
@@ -63,18 +63,18 @@ def interactive_test():
 
     # Step 3: Navigate within system
     if system_1.options and '1' in system_1.options:
-        print("STEP 3: User selects option '1' within Information Booth")
+        print("STEP 3: User selects option '1' within selected system")
         subsystem = system_1.options['1']
         print(f"  → Subsystem audio file: {subsystem.audio_file}")
         print()
 
-        print("  Playing Info submenu...")
+        print("  Playing selected submenu...")
         audio.play_file(subsystem.audio_file, blocking=False)
         input("  → Audio should be playing. Press Enter when done...")
         audio.stop()
         print()
 
-        print("STEP 4: Submenu ends, should return to Information Booth menu")
+        print("STEP 4: Submenu ends, should return to selected system menu")
         print(f"  → Would return to: {system_1.audio_file}")
         print()
 
@@ -83,15 +83,14 @@ def interactive_test():
     print("AUTOMATED NAVIGATION TEST")
     print("="*70)
     print("\nNow let's test the actual navigate_bios_menu() function")
-    print("This will auto-play: BIOS → Info Booth → Info Submenu")
+    print("This will auto-play: BIOS → selected system")
     print()
 
     input("Press Enter to start automated test...")
 
     # Create input queue
     input_queue = queue.Queue()
-    input_queue.put('1')  # Select Info Booth
-    input_queue.put('1')  # Select Info submenu
+    input_queue.put('1')  # Select first discovered system
 
     call_count = [0]
 
@@ -110,8 +109,7 @@ def interactive_test():
     print("="*70)
     print("\nDid you hear:")
     print("  1. BIOS menu audio?")
-    print("  2. Information Booth menu audio?")
-    print("  3. Info submenu audio?")
+    print("  2. Selected system audio?")
     print()
     print("If not, check:")
     print("  - Are audio files present?")

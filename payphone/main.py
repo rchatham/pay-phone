@@ -102,17 +102,29 @@ except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
     from payphone.bios import BIOSBootloader as PhoneSystem
 
-# Legacy mode: Allow direct system launch via environment variable
-# Set PAYPHONE_LEGACY_MODE=information_booth to bypass BIOS
+# Legacy mode: Allow direct system launch via environment variable.
+# Set PAYPHONE_LEGACY_MODE=<system_id> to bypass BIOS.
 legacy_mode = os.environ.get('PAYPHONE_LEGACY_MODE')
 
-if legacy_mode:
-    logger.info(f"Legacy mode enabled: {legacy_mode}")
+
+def _load_legacy_system(system_id: str):
+    """Load a configured phone system directly by BIOS system ID."""
     try:
-        from phone_systems import InformationBoothSystem as LegacyPhoneSystem
+        from payphone.bios.config_manager import ConfigManager
+        from payphone.bios.system_manager import SystemManager
     except ImportError:
         sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-        from phone_systems import InformationBoothSystem as LegacyPhoneSystem
+        from payphone.bios.config_manager import ConfigManager
+        from payphone.bios.system_manager import SystemManager
+
+    config_manager = ConfigManager()
+    manager = SystemManager(config_manager.get_scan_paths())
+    manager.discover_systems()
+    system_class = manager.load_system(system_id)
+    if system_class is None:
+        raise ValueError(f"No phone system found for PAYPHONE_LEGACY_MODE={system_id!r}")
+    return system_class
+
 
 def main():
     # Kill any existing payphone instances before starting
@@ -121,7 +133,7 @@ def main():
     # Create and run the phone system
     if legacy_mode:
         logger.info("Running in legacy mode (bypassing BIOS)")
-        system = LegacyPhoneSystem()
+        system = _load_legacy_system(legacy_mode)()
     else:
         logger.info("Running with BIOS bootloader")
         system = PhoneSystem()

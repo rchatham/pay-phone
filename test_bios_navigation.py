@@ -31,8 +31,8 @@ def test_bios_navigation():
     # Create input queue
     input_queue = queue.Queue()
 
-    # Test 1: Navigate to Information Booth (option 1)
-    print("TEST 1: Navigate to Information Booth System")
+    # Test 1: Navigate to the first discovered system (option 1)
+    print("TEST 1: Navigate to first discovered system")
     print("-" * 60)
     input_queue.put('1')  # Select system 1
 
@@ -45,24 +45,6 @@ def test_bios_navigation():
         has_input = not input_queue.empty()
         within_limit = iteration_count[0] < max_iterations
         return has_input or within_limit
-
-    try:
-        print("Starting navigation...")
-        bios_menu.navigate(input_queue, hook_status, bios_menu)
-        print(f"✓ Navigation completed after {iteration_count[0]} iterations\n")
-    except Exception as e:
-        print(f"✗ Navigation failed: {e}\n")
-        import traceback
-        traceback.print_exc()
-
-    # Test 2: Navigate to option within Information Booth
-    print("\nTEST 2: Navigate within Information Booth")
-    print("-" * 60)
-    input_queue = queue.Queue()
-    input_queue.put('1')  # Select Information Booth
-    input_queue.put('1')  # Select option 1 within Information Booth
-
-    iteration_count[0] = 0
 
     try:
         print("Starting navigation...")
