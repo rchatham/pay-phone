@@ -1,15 +1,75 @@
 """
-Unit tests for PhoneTree navigation system
+Unit tests for the deprecated payphone.phone_system.phone_tree wrapper.
 
-Tests menu navigation, option selection, timeout handling,
-and action execution without requiring hardware.
+The wrapper keeps the old import path alive and auto-creates an audio
+handler. These tests cover wrapper construction plus navigation behavior
+inherited from payphone.core.phone_tree.PhoneTree using mocked audio so
+they run quickly and deterministically on any machine.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock, call
-from queue import Queue, Empty
 import time
+from itertools import chain, repeat
+from queue import Queue
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+import pytest
+
 from payphone.phone_system.phone_tree import PhoneTree
+
+
+class FakeAudioHandler:
+    """Records playback calls; never reports an active prompt."""
+
+    def __init__(self) -> None:
+        self.played = []
+        self.stopped = 0
+
+    def play_file(self, filename: str, blocking: bool = True) -> bool:
+        self.played.append((filename, blocking))
+        return True
+
+    def stop(self) -> None:
+        self.stopped += 1
+
+    def is_playing(self) -> bool:
+        return False
+
+
+@pytest.fixture(autouse=True)
+def fake_audio(monkeypatch):
+    """Replace the wrapper's eager AudioHandler with a fake instance."""
+    audio = FakeAudioHandler()
+    monkeypatch.setattr(
+        "payphone.phone_system.phone_tree.AudioHandler",
+        lambda *args, **kwargs: audio,
+    )
+    return audio
+
+
+@pytest.fixture(autouse=True)
+def fast_time(monkeypatch):
+    """Remove real sleeps from navigation loops to keep tests fast."""
+    monkeypatch.setattr(
+        "payphone.core.phone_tree.time",
+        SimpleNamespace(time=time.time, sleep=lambda *_: None),
+    )
+
+
+def on_hook_for(seconds: float):
+    """Return a hook_status that stays off hook for a bounded time."""
+    deadline = time.time() + seconds
+    return lambda: time.time() < deadline
+
+
+def finite_hook(true_calls: int = 3):
+    """Return a hook_status that goes on hook after true_calls checks."""
+    states = chain([True] * true_calls, repeat(False))
+    return lambda: next(states, False)
+
+
+def played_names(audio) -> list[str]:
+    return [filename for filename, _ in audio.played]
 
 
 @pytest.mark.unit
@@ -60,220 +120,178 @@ class TestPhoneTreeBasics:
 class TestPhoneTreeNavigation:
     """Test PhoneTree navigation logic"""
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_navigate_to_child_option(self, mock_audio_class):
+    def test_navigate_to_child_option(self, fake_audio):
         """Test navigating to a child menu option"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-        mock_audio.play_file = Mock()
-
-        # Create tree structure
-        child = PhoneTree(audio_file="menu/child.wav")
+        child = PhoneTree(audio_file="menu/child.wav", timeout=1)
         parent = PhoneTree(
             audio_file="menu/parent.wav",
-            options={'1': child}
+            options={'1': child},
+            timeout=1,
         )
 
-        # Setup input queue and hook status
         input_queue = Queue()
         input_queue.put('1')
-        hook_status = Mock(return_value=True)  # On-hook = True
 
-        # Navigate
-        parent.navigate(input_queue, hook_status)
+        parent.navigate(input_queue, on_hook_for(2.0), parent)
 
-        # Verify both parent and child audio files played
-        assert mock_audio.play_file.call_count == 2
-        calls = [call[0][0] for call in mock_audio.play_file.call_args_list]
-        assert "menu/parent.wav" in calls
-        assert "menu/child.wav" in calls
+        # Both parent and child audio files played
+        names = played_names(fake_audio)
+        assert "menu/parent.wav" in names
+        assert "menu/child.wav" in names
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_navigate_invalid_option_replays_menu(self, mock_audio_class):
+    def test_navigate_invalid_option_replays_menu(self, fake_audio):
         """Test that invalid option replays the current menu"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
         tree = PhoneTree(
             audio_file="menu/main.wav",
-            options={'1': PhoneTree(audio_file="menu/option1.wav")}
+            options={'1': PhoneTree(audio_file="menu/option1.wav", timeout=1)},
+            timeout=1,
         )
 
         input_queue = Queue()
         input_queue.put('9')  # Invalid option
-        input_queue.put('1')  # Valid option
-        hook_status = Mock(return_value=True)
 
-        # Navigate should handle invalid input gracefully
-        tree.navigate(input_queue, hook_status)
+        tree.navigate(input_queue, on_hook_for(2.0), tree)
 
-        # Menu audio should be played multiple times (initial + retry after invalid)
-        assert mock_audio.play_file.call_count >= 2
+        # Menu audio replayed after the invalid press
+        names = played_names(fake_audio)
+        assert names.count("menu/main.wav") >= 2
+        assert "prompts/invalid_option.mp3" in names
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_action_execution(self, mock_audio_class):
+    def test_action_execution(self, fake_audio):
         """Test that action callbacks are executed"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-        mock_action = Mock()
+        mock_action = Mock(return_value=True)
 
         tree = PhoneTree(
             audio_file="menu/action.wav",
-            action=mock_action
+            action=mock_action,
+            timeout=1,
         )
 
-        input_queue = Queue()
-        hook_status = Mock(return_value=True)
+        tree.navigate(Queue(), finite_hook(1))
 
-        tree.navigate(input_queue, hook_status)
-
-        # Verify action was called
         mock_action.assert_called_once()
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_hook_off_terminates_navigation(self, mock_audio_class):
-        """Test that hook going off-hook terminates navigation"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
-        tree = PhoneTree(audio_file="menu/main.wav")
+    def test_hook_off_terminates_navigation(self, fake_audio):
+        """Test that an on-hook phone terminates navigation before playback"""
+        tree = PhoneTree(audio_file="menu/main.wav", timeout=1)
 
         input_queue = Queue()
-        hook_status = Mock(return_value=False)  # Off-hook = False
 
-        tree.navigate(input_queue, hook_status)
+        # Current behavior checks the hook before playing anything.
+        tree.navigate(input_queue, lambda: False, tree)
 
-        # Should stop navigation immediately
-        assert mock_audio.play_file.call_count >= 1
+        assert fake_audio.played == []
 
 
 @pytest.mark.unit
 class TestPhoneTreeTimeout:
     """Test timeout handling"""
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_timeout_with_no_input(self, mock_audio_class):
-        """Test that menu times out with no input"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
+    def test_timeout_with_no_input(self, fake_audio):
+        """Test that a menu with options times out with no input and replays"""
         tree = PhoneTree(
             audio_file="menu/main.wav",
-            timeout=1  # 1 second timeout for fast testing
+            options={'1': PhoneTree(audio_file="menu/option1.wav", timeout=1)},
+            timeout=1,
         )
 
-        input_queue = Queue()
-        hook_status = Mock(return_value=True)
-
         start_time = time.time()
-        tree.navigate(input_queue, hook_status)
+        tree.navigate(Queue(), on_hook_for(2.5), tree)
         elapsed = time.time() - start_time
 
         # Should timeout after ~1 second
         assert elapsed >= 1
-        assert elapsed < 2  # Some margin for execution time
+        names = played_names(fake_audio)
+        assert "prompts/timeout.mp3" in names
+        assert names.count("menu/main.wav") >= 2
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_timeout_returns_to_parent(self, mock_audio_class):
-        """Test that timeout returns to parent menu"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
+    def test_timeout_returns_to_parent(self, fake_audio):
+        """Test that child timeout returns to the parent menu"""
         child = PhoneTree(
             audio_file="menu/child.wav",
-            timeout=1
+            timeout=1,
         )
         parent = PhoneTree(
             audio_file="menu/parent.wav",
-            options={'1': child}
+            options={'1': child},
+            timeout=1,
         )
 
         input_queue = Queue()
         input_queue.put('1')  # Navigate to child
-        # No more input - should timeout
+        # No more input - child should timeout
 
-        hook_status = Mock(return_value=True)
-
-        parent.navigate(input_queue, hook_status)
+        parent.navigate(input_queue, on_hook_for(3.0), parent)
 
         # Both parent and child should have played
-        assert mock_audio.play_file.call_count >= 2
+        names = played_names(fake_audio)
+        assert "menu/child.wav" in names
+        assert names.count("menu/parent.wav") >= 2
 
 
 @pytest.mark.unit
 class TestPhoneTreeComplexScenarios:
     """Test complex navigation scenarios"""
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_deep_navigation(self, mock_audio_class):
+    def test_deep_navigation(self, fake_audio):
         """Test navigating through multiple levels"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
-        # Create 3-level tree
-        level3 = PhoneTree(audio_file="menu/level3.wav")
+        level3 = PhoneTree(audio_file="menu/level3.wav", timeout=1)
         level2 = PhoneTree(
             audio_file="menu/level2.wav",
-            options={'1': level3}
+            options={'1': level3},
+            timeout=1,
         )
         level1 = PhoneTree(
             audio_file="menu/level1.wav",
-            options={'1': level2}
+            options={'1': level2},
+            timeout=1,
         )
 
         input_queue = Queue()
         input_queue.put('1')  # Go to level 2
         input_queue.put('1')  # Go to level 3
-        hook_status = Mock(return_value=True)
 
-        level1.navigate(input_queue, hook_status)
+        level1.navigate(input_queue, on_hook_for(4.0), level1)
 
         # All three levels should have played
-        assert mock_audio.play_file.call_count == 3
+        names = played_names(fake_audio)
+        for audio_file in ("menu/level1.wav", "menu/level2.wav", "menu/level3.wav"):
+            assert audio_file in names
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_multiple_options(self, mock_audio_class):
+    def test_multiple_options(self, fake_audio):
         """Test menu with many options"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
-        # Create menu with options 0-9, *, #
-        options = {}
-        for key in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '#']:
-            options[key] = PhoneTree(audio_file=f"menu/option_{key}.wav")
+        options = {
+            key: PhoneTree(audio_file=f"menu/option_{key}.wav", timeout=1)
+            for key in ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '#']
+        }
 
         main = PhoneTree(
             audio_file="menu/main.wav",
-            options=options
+            options=options,
+            timeout=1,
         )
 
         input_queue = Queue()
         input_queue.put('5')
-        hook_status = Mock(return_value=True)
 
-        main.navigate(input_queue, hook_status)
+        main.navigate(input_queue, on_hook_for(2.0), main)
 
         # Should successfully navigate to option 5
-        assert mock_audio.play_file.call_count == 2
+        assert "menu/option_5.wav" in played_names(fake_audio)
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_action_with_options(self, mock_audio_class):
+    def test_action_with_options(self, fake_audio):
         """Test tree node with both action and options"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-        mock_action = Mock()
+        mock_action = Mock(return_value=True)
 
-        child = PhoneTree(audio_file="menu/child.wav")
+        child = PhoneTree(audio_file="menu/child.wav", timeout=1)
         parent = PhoneTree(
             audio_file="menu/parent.wav",
             options={'1': child},
-            action=mock_action  # Has both action and options
+            action=mock_action,  # Has both action and options
+            timeout=1,
         )
 
-        input_queue = Queue()
-        hook_status = Mock(return_value=True)
-
-        parent.navigate(input_queue, hook_status)
+        parent.navigate(Queue(), on_hook_for(2.0), parent)
 
         # Action should be executed
         mock_action.assert_called_once()
@@ -293,19 +311,16 @@ class TestPhoneTreeEdgeCases:
         tree = PhoneTree(audio_file=None)
         assert tree.audio_file is None
 
-    @patch('payphone.phone_system.phone_tree.AudioHandler')
-    def test_rapid_input(self, mock_audio_class):
+    def test_rapid_input(self, fake_audio):
         """Test handling rapid keypad input"""
-        mock_audio = Mock()
-        mock_audio_class.return_value = mock_audio
-
         tree = PhoneTree(
             audio_file="menu/main.wav",
             options={
-                '1': PhoneTree(audio_file="menu/option1.wav"),
-                '2': PhoneTree(audio_file="menu/option2.wav"),
-                '3': PhoneTree(audio_file="menu/option3.wav"),
-            }
+                '1': PhoneTree(audio_file="menu/option1.wav", timeout=1),
+                '2': PhoneTree(audio_file="menu/option2.wav", timeout=1),
+                '3': PhoneTree(audio_file="menu/option3.wav", timeout=1),
+            },
+            timeout=1,
         )
 
         input_queue = Queue()
@@ -314,9 +329,13 @@ class TestPhoneTreeEdgeCases:
         input_queue.put('2')
         input_queue.put('3')
 
-        hook_status = Mock(return_value=True)
-
-        tree.navigate(input_queue, hook_status)
+        tree.navigate(input_queue, on_hook_for(3.5), tree)
 
         # Should handle all inputs
-        assert mock_audio.play_file.call_count >= 2
+        names = played_names(fake_audio)
+        for digit in '123':
+            assert f"menu/option{digit}.wav" in names
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
