@@ -1,6 +1,8 @@
 """Tests for core PhoneTree behavior shared by plugins."""
 
+from itertools import chain, repeat
 from queue import Queue
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 from payphone.core.phone_tree import PhoneTree
@@ -109,10 +111,18 @@ def test_hybrid_root_return_key_does_not_recurse() -> None:
     action.assert_called_once_with()
 
 
-def test_root_timeout_replays_prompt_without_recursing() -> None:
+def test_root_timeout_replays_prompt_without_recursing(monkeypatch) -> None:
     audio = FakeAudioHandler()
     menu = PhoneTree("menu.wav", audio_handler=audio, options={"1": FakeOption()}, timeout=0)
     hook_states = iter([True, True, False])
+
+    # Pin the clock so the timeout=0 comparison cannot race the wall clock:
+    # first call sets start_time to 0.0, later calls report 1.0 elapsed.
+    fake_time = SimpleNamespace(
+        time=Mock(side_effect=chain([0.0], repeat(1.0))),
+        sleep=lambda *_: None,
+    )
+    monkeypatch.setattr("payphone.core.phone_tree.time", fake_time)
 
     menu.navigate(Queue(), lambda: next(hook_states, False), menu)
 
