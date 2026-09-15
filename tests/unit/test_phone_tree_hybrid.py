@@ -11,6 +11,8 @@ Tests cover:
 """
 import pytest
 import queue
+from itertools import chain, repeat
+from types import SimpleNamespace
 from unittest.mock import Mock, MagicMock, call
 import time
 
@@ -23,6 +25,21 @@ class MockAudioHandler:
         self.play_file = Mock(return_value=True)
         self.stop = Mock()
         self.is_playing = Mock(return_value=False)
+
+
+@pytest.fixture(autouse=True)
+def fast_time(monkeypatch):
+    """Remove real sleeps from navigation loops to keep tests fast."""
+    monkeypatch.setattr(
+        "payphone.core.phone_tree.time",
+        SimpleNamespace(time=time.time, sleep=lambda *_: None),
+    )
+
+
+def on_hook_for(seconds: float):
+    """Return a hook_status that stays off hook for a bounded time."""
+    deadline = time.time() + seconds
+    return lambda: time.time() < deadline
 
 
 @pytest.mark.unit
@@ -130,15 +147,10 @@ class TestPhoneTreeHybridNavigation:
         input_queue = queue.Queue()
         input_queue.put('1')  # No * prefix
 
-        # Use return_value instead of side_effect to avoid StopIteration
-        hook_status = Mock(return_value=True)
-        # Limit iterations manually by checking queue
-        call_count = [0]
-        def limited_hook():
-            call_count[0] += 1
-            return call_count[0] < 50  # Safety limit
+        # Bound navigation by wall clock instead of a call cap
+        hook_status = on_hook_for(1.5)
 
-        tree.navigate(input_queue, limited_hook, tree)
+        tree.navigate(input_queue, hook_status, tree)
 
         # Should play main menu then info
         assert mock_audio.play_file.called
@@ -165,15 +177,10 @@ class TestPhoneTreeHybridNavigation:
         input_queue.put('0')
         input_queue.put('1')
 
-        call_count = [0]
-        def limited_hook():
-            call_count[0] += 1
-            # Limit calls to prevent infinite loop - give enough iterations for full cycle
-            if call_count[0] > 500:
-                return False
-            return True
+        # Prompt is playing when * is pressed so activation stops it
+        mock_audio.is_playing = Mock(side_effect=chain([True], repeat(False)))
 
-        tree.navigate(input_queue, limited_hook, tree)
+        tree.navigate(input_queue, on_hook_for(2.0), tree)
 
         # Should stop main menu audio when * pressed (entering extension mode)
         assert mock_audio.stop.called
@@ -232,7 +239,7 @@ class TestPhoneTreeHybridNavigation:
         input_queue.put('9')
         input_queue.put('9')  # Complete but invalid
 
-        hook_status = Mock(side_effect=[True] * 20 + [False])
+        hook_status = on_hook_for(2.0)
         tree.navigate(input_queue, hook_status, tree)
 
         # Should play invalid_extension.mp3
@@ -261,9 +268,10 @@ class TestPhoneTreeHybridNavigation:
 class TestPhoneTreeHybridEdgeCases:
     """Test edge cases in hybrid mode"""
 
-    def test_prefix_then_return_key(self):
-        """Test * followed by 0 returns to menu"""
+    def test_prefix_then_extension_digit_buffered(self):
+        """Test that digits after * are buffered even when they are the return key"""
         mock_audio = MockAudioHandler()
+        alice_audio = MockAudioHandler()
 
         tree = PhoneTree(
             audio_file="menu/main.mp3",
@@ -272,13 +280,16 @@ class TestPhoneTreeHybridEdgeCases:
             return_to_menu_key='0',
             audio_handler=mock_audio,
             options={
-                "101": PhoneTree("alice.mp3", audio_handler=MockAudioHandler()),
+                "101": PhoneTree("alice.mp3", audio_handler=alice_audio),
             }
         )
 
         input_queue = queue.Queue()
-        input_queue.put('*')  # Activate extension mode
-        input_queue.put('0')  # Return key with empty buffer - should cancel
+        input_queue.put('*')  # Activate extension mode (stops the playing prompt)
+        input_queue.put('0')  # Return key while in extension mode is buffered as a digit
+
+        # Prompt is playing when * is pressed so activation stops it
+        mock_audio.is_playing = Mock(side_effect=chain([True], repeat(False)))
 
         call_count = [0]
         def limited_hook():
@@ -287,8 +298,9 @@ class TestPhoneTreeHybridEdgeCases:
 
         tree.navigate(input_queue, limited_hook, tree)
 
-        # Should return to menu without error
+        # Prompt stopped on extension entry; "101" was never dialed
         assert mock_audio.stop.called
+        assert not alice_audio.play_file.called
 
     def test_extension_timeout(self):
         """Test partial extension auto-submits after timeout"""
@@ -311,17 +323,13 @@ class TestPhoneTreeHybridEdgeCases:
         input_queue.put('0')
         # Don't press terminator - let it timeout
 
-        call_count = [0]
-        def limited_hook():
-            call_count[0] += 1
-            # Give enough iterations for timeout to occur
-            return call_count[0] < 100
+        ten_audio = MockAudioHandler()
+        tree.options['10'].audio_handler = ten_audio
 
-        tree.navigate(input_queue, limited_hook, tree)
+        tree.navigate(input_queue, on_hook_for(2.0), tree)
 
         # Extension "10" should be submitted via timeout
-        # (Hard to test timing precisely, but navigation should complete)
-        assert True  # If we get here without hanging, timeout worked
+        assert ten_audio.play_file.called
 
     def test_is_extension_complete_fixed_length(self):
         """Test extension completion detection with fixed length"""
