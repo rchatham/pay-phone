@@ -318,7 +318,8 @@ def navigate_bios_menu(bios_menu: PhoneTree, input_queue, hook_check):
 
 def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
     """Build a BIOS-style system selection menu"""
-    from payphone.bios.system_manager import SystemManager
+    from payphone.bios.config_manager import ConfigManager
+    from payphone.bios.system_manager import SystemManager, load_theme
     from payphone.config.settings import Config
 
     # Discover systems
@@ -340,10 +341,14 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
         ordered_systems.append(("TDTM", SimpleNamespace(name="TDTM System")))
         added_system_ids.add("TDTM")
 
-    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
+    # Installed theme packs (theme_path in .bios_config.json) control BIOS
+    # ordering; unknown ids fall back to alphabetical order.
+    theme = load_theme(ConfigManager().get_theme_path())
+    order_ids: list[str] = list(theme.get("system_order", [])) if theme else []
+    priority = {system_id: index for index, system_id in enumerate(order_ids)}
     remaining_systems = sorted(
         ((system_id, system_info) for system_id, system_info in systems.items() if system_id not in added_system_ids),
-        key=lambda item: (priority.get(item[0], len(priority)), item[1].name),
+        key=lambda item: (priority.get(item[0], len(order_ids)), item[1].name),
     )
     for system_id, system_info in remaining_systems:
         ordered_systems.append((system_id, system_info))
