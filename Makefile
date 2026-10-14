@@ -59,12 +59,15 @@ ensure-bm-info-line-plugin: ## Link sibling bm-info-line plugin into BIOS plugin
 		fi; \
 	fi
 
+# Primary checkout root (resolves through worktrees so the sibling pack is found)
+PAYPHONE_PRIMARY_ROOT := $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | xargs dirname)
+
 ensure-bm-payphone-theme: ## Install the bm-payphone-theme pack into this checkout when the sibling repo exists
-	@if [ -d ../bm-payphone-theme/scripts ]; then \
+	@if [ -d "$(PAYPHONE_PRIMARY_ROOT)/../bm-payphone-theme/scripts" ]; then \
 		echo "$(BLUE)Installing bm-payphone-theme pack...$(NC)"; \
-		python3 ../bm-payphone-theme/scripts/install.py --pay-phone .; \
+		python3 "$(PAYPHONE_PRIMARY_ROOT)/../bm-payphone-theme/scripts/install.py" --pay-phone .; \
 	else \
-		echo "$(YELLOW)bm-payphone-theme sibling repo not found at ../bm-payphone-theme; BIOS will use the default theme$(NC)"; \
+		echo "$(YELLOW)bm-payphone-theme sibling repo not found next to the primary checkout; BIOS will use the default theme$(NC)"; \
 	fi
 
 ensure-simulator-deps: venv ## Install local simulator dependencies when missing

@@ -34,12 +34,12 @@ def load_theme(theme_path: Optional[str]) -> Optional[Dict[str, Any]]:
     if not theme_path:
         return None
 
-    theme_file = Path(theme_path) / "theme.json"
-    try:
-        return json.loads(theme_file.read_text())
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Could not load theme %s: %s", theme_file, exc)
-        return None
+    for candidate in (Path(theme_path) / "theme" / "theme.json", Path(theme_path) / "theme.json"):
+        try:
+            return json.loads(candidate.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not load theme %s: %s", candidate, exc)
+    return None
 
 
 class SystemInfo:
