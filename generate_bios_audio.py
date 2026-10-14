@@ -97,13 +97,12 @@ def main():
     print()
 
     # Generate main menu
-    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
-    ordered_systems = sorted(systems.items(), key=lambda item: (priority.get(item[0], len(priority)), item[1].name))
+    ordered_systems = sorted(systems.items(), key=lambda item: item[1].name)
     if ordered_systems:
-        menu_text = "Welcome home. You have reached the Black Rock City payphone switchboard. "
+        menu_text = "Welcome to payphone BIOS. "
         for idx, (system_id, info) in enumerate(ordered_systems, start=1):
             menu_text += f"Press {idx} for {info.name}. "
-        menu_text += "Stay dusty, and leave no trace."
+        menu_text = menu_text.strip()
 
         generate_audio(
             menu_text,
@@ -112,8 +111,8 @@ def main():
     else:
         print("⚠️  No systems found, generating error message only")
         generate_audio(
-            "Welcome home. You have reached the Black Rock City payphone switchboard. No phone systems found. Please check configuration.",
-            str(audio_dir / "prompts" / "no_systems.mp3")
+            "Welcome to payphone BIOS. No phone systems found. Please check configuration.",
+            str(audio_dir / "bios" / "main_menu.mp3")
         )
 
     # Generate individual system audio files

@@ -10,11 +10,9 @@ macOS `say` + ffmpeg. Use --provider qwen for local Qwen3-TTS generation.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import Literal, TypedDict
@@ -365,8 +363,7 @@ def generate_audio_file(
 
 
 def _ordered_bios_systems(systems):
-    priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
-    return sorted(systems.items(), key=lambda item: (priority.get(item[0], len(priority)), item[1].name))
+    return sorted(systems.items(), key=lambda item: item[1].name)
 
 
 def discover_bios_prompts() -> dict[str, AudioPrompt]:
@@ -382,19 +379,13 @@ def discover_bios_prompts() -> dict[str, AudioPrompt]:
     prompts: dict[str, AudioPrompt] = {}
 
     if ordered_systems:
-        menu_parts = [
-            "Welcome home. You have reached the Black Rock City payphone switchboard."
-        ]
+        menu_parts = ["Welcome to payphone BIOS."]
         for idx, (_, info) in enumerate(ordered_systems, start=1):
             menu_parts.append(f"Press {idx} for {info.name}.")
-        menu_parts.append("Stay dusty, and leave no trace.")
         prompts["bios/main_menu.mp3"] = {"text": " ".join(menu_parts), "voice": "nova"}
     else:
         prompts["bios/main_menu.mp3"] = {
-            "text": (
-                "Welcome home. You have reached the Black Rock City payphone switchboard. "
-                "No camps, art cars, or phone systems are on the line yet. Please check configuration."
-            ),
+            "text": "Welcome to payphone BIOS. No phone systems found. Please check configuration.",
             "voice": "nova",
         }
 
@@ -407,62 +398,10 @@ def discover_bios_prompts() -> dict[str, AudioPrompt]:
     return prompts
 
 
-def discover_trivia_prompts() -> dict[str, AudioPrompt]:
-    module_path = Path("plugins/bm-trivia/bm_trivia.py")
-    if not module_path.exists():
-        return {}
-
-    spec = importlib.util.spec_from_file_location("bm_trivia_prompts", module_path)
-    if spec is None or spec.loader is None:
-        return {}
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-
-    prompts: dict[str, AudioPrompt] = {
-        "bm-trivia/intro.mp3": {"text": module.TRIVIA_INTRO_TEXT, "voice": "nova"},
-        "bm-trivia/no_questions.mp3": {
-            "text": "No trivia questions are available right now. Returning to the BIOS switchboard.",
-            "voice": "alloy",
-        },
-        "bm-trivia/no_answer.mp3": {
-            "text": "No answer was entered. Ending the trivia game.",
-            "voice": "alloy",
-        },
-    }
-
-    for index, question in enumerate(module.CURATED_QUESTIONS, start=1):
-        for round_number in range(1, module.QUESTIONS_PER_ROUND + 1):
-            prompts[f"bm-trivia/question_{index:02d}_round_{round_number}.mp3"] = {
-                "text": question.spoken_question(round_number),
-                "voice": "nova",
-            }
-        prompts[f"bm-trivia/answer_{index:02d}_correct.mp3"] = {
-            "text": question.spoken_answer(True),
-            "voice": "shimmer",
-        }
-        prompts[f"bm-trivia/answer_{index:02d}_wrong.mp3"] = {
-            "text": question.spoken_answer(False),
-            "voice": "alloy",
-        }
-
-    for asked in range(0, module.QUESTIONS_PER_ROUND + 1):
-        for score in range(0, asked + 1):
-            prompts[f"bm-trivia/score_{score}_of_{asked}.mp3"] = {
-                "text": module.score_summary(score, asked),
-                "voice": "shimmer",
-            }
-
-    return prompts
-
-
-def build_prompt_set(include_bios: bool, include_trivia: bool) -> dict[str, AudioPrompt]:
+def build_prompt_set(include_bios: bool) -> dict[str, AudioPrompt]:
     prompts = dict(AUDIO_FILES)
     if include_bios:
         prompts.update(discover_bios_prompts())
-    if include_trivia:
-        prompts.update(discover_trivia_prompts())
     return prompts
 
 
@@ -513,7 +452,6 @@ def parse_args() -> argparse.Namespace:
         help="Only generate prompt paths with this relative prefix; may be passed more than once",
     )
     parser.add_argument("--no-bios", action="store_true", help="Skip dynamic BIOS menu/system prompts")
-    parser.add_argument("--no-trivia", action="store_true", help="Skip Burning Man trivia prompts")
     parser.add_argument("--skip-existing", action="store_true", help="Do not regenerate audio files that already exist")
     return parser.parse_args()
 
@@ -523,7 +461,7 @@ def main() -> None:
     provider = choose_provider(args.provider)
     qwen_speaker = args.qwen_voice or args.qwen_speaker
     audio_dir = Path(args.audio_dir)
-    prompts = build_prompt_set(include_bios=not args.no_bios, include_trivia=not args.no_trivia)
+    prompts = build_prompt_set(include_bios=not args.no_bios)
     if args.only_prefix:
         prefixes = tuple(args.only_prefix)
         prompts = {
