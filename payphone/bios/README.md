@@ -81,6 +81,7 @@ Edit `.bios_config.json` in the project root:
     "./phone_systems",
     "./plugins"
   ],
+  "theme_path": "",
   "available_systems": []
 }
 ```
@@ -92,8 +93,25 @@ Edit `.bios_config.json` in the project root:
 - `bios_enter_hold_seconds`: Seconds to hold hook to enter BIOS in legacy auto-launch mode (default: 0.0)
 - `bios_exit_long_press_seconds`: Seconds to hold * to return to BIOS (default: 5.0)
 - `scan_paths`: Directories to scan for phone systems
+- `theme_path`: Filesystem path of an installed BIOS theme pack (contains `theme/theme.json`); empty for the default theme
 - `available_systems`: Auto-populated with discovered systems
 
+### Themes
+
+The default BIOS is generic: systems are listed alphabetically and the prompts say
+"Welcome to payphone BIOS.". A theme pack customizes menu ordering and ships its own
+rendered audio. When `theme_path` points at a pack containing `theme/theme.json`, the
+BIOS orders the menu by the pack's `system_order` list (unknown system ids fall back
+to alphabetical order) and plays the pack's `audio_files/bios/*.mp3` overrides.
+
+The Burning Man theme lives in the separate `bm-payphone-theme` repo. With it checked
+out next to this repo, `make run-simulator` installs it automatically; to install or
+remove it manually:
+
+```bash
+python3 ../bm-payphone-theme/scripts/install.py --pay-phone .   # install
+python3 ../bm-payphone-theme/scripts/install.py --remove        # uninstall
+```
 ## Creating a Phone System
 
 Runnable examples that should not appear in BIOS can live outside the default scan paths, such as `examples/information_booth/`.

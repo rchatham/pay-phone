@@ -20,7 +20,7 @@ from ..config.settings import Config
 from ..core.phone_tree import PhoneTree
 from ..core.system import PhoneSystemBase
 from .config_manager import ConfigManager
-from .system_manager import SystemManager, SystemInfo
+from .system_manager import SystemManager, SystemInfo, load_theme
 
 logger = logging.getLogger(__name__)
 
@@ -262,10 +262,15 @@ class BIOSBootloader(PhoneSystemBase):
                 audio_handler=self.audio_handler
             )
 
-        # Build menu options with stable event-facing ordering.
-        menu_options = {}
-        priority = {system_id: index for index, system_id in enumerate(("TDTM", "LAM", "bm-trivia", "bm-info-line"))}
-        ordered_systems = sorted(systems, key=lambda system: (priority.get(system.id, len(priority)), system.name))
+        # Build menu options. Installed theme packs (theme_path in .bios_config.json)
+        # control the ordering; unknown ids fall back to alphabetical order.
+        theme = load_theme(self.bios_config.get_theme_path())
+        order_ids: list[str] = list(theme.get("system_order", [])) if theme else []
+        priority = {system_id: index for index, system_id in enumerate(order_ids)}
+        ordered_systems = sorted(
+            systems,
+            key=lambda system: (priority.get(system.id, len(order_ids)), system.name),
+        )
         for idx, system in enumerate(ordered_systems, start=1):
             if idx > 9:
                 logger.warning(f"Too many systems (max 9), skipping: {system.name}")
