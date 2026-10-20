@@ -106,14 +106,12 @@ class GPIOKeypad:
             if key and key != last_key:
                 # New key pressed
                 current_time = time.time()
-                logger.debug(f"Key detected: {key} (last={last_key}, debounce_ok={current_time - self.last_key_time > self.debounce_time})")
                 if current_time - self.last_key_time > self.debounce_time:
                     # Play DTMF tone for button press
                     if self.audio_handler:
                         self.audio_handler.play_dtmf_tone(key)
 
                     self.input_queue.put(key)
-                    logger.info(f"Key pressed: {key}")
                     self.last_key_time = current_time
 
             last_key = key

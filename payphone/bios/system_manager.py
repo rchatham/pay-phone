@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Type, Any
 
 from ..core.system import PhoneSystemBase
+from ..config.persistence import REPOSITORY_ROOT
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class SystemManager:
         Args:
             scan_paths: List of directory paths to scan for phone systems
         """
-        self.scan_paths = scan_paths or []
+        self.scan_paths = [str(REPOSITORY_ROOT / p) for p in (scan_paths if scan_paths is not None else ["phone_systems", "plugins"])]
         self.discovered_systems: Dict[str, SystemInfo] = {}
 
     def discover_systems(self) -> Dict[str, SystemInfo]:
@@ -95,7 +96,7 @@ class SystemManager:
                 self._scan_system_dir(path)
             # Check subdirectories
             elif path.is_dir():
-                for subdir in path.iterdir():
+                for subdir in sorted(path.iterdir(), key=lambda entry: entry.name):
                     if subdir.is_dir() and (subdir / "system.py").exists():
                         self._scan_system_dir(subdir)
 
@@ -104,7 +105,7 @@ class SystemManager:
 
     def _scan_phone_systems_dir(self, path: Path) -> None:
         """Scan a phone_systems directory for multiple systems"""
-        for subdir in path.iterdir():
+        for subdir in sorted(path.iterdir(), key=lambda entry: entry.name):
             if subdir.is_dir() and (subdir / "system.py").exists():
                 self._scan_system_dir(subdir)
 
@@ -189,7 +190,9 @@ class SystemManager:
 
         if "phone_systems" not in sys.modules:
             package = types.ModuleType("phone_systems")
-            package.__path__ = []
+            # Include the canonical package even when an external plugin is scanned
+            # first; an empty namespace hides phone_systems.information_booth.
+            package.__path__ = [str(REPOSITORY_ROOT / "phone_systems")]
             sys.modules["phone_systems"] = package
 
         package_name = f"phone_systems.{module_id}"
@@ -271,4 +274,4 @@ class SystemManager:
 
     def list_systems(self) -> List[SystemInfo]:
         """Get list of all discovered systems"""
-        return list(self.discovered_systems.values())
+        return [self.discovered_systems[key] for key in sorted(self.discovered_systems)]

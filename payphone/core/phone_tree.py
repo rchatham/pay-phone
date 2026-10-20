@@ -4,6 +4,7 @@ import logging
 from typing import Dict, Optional, Callable, Any
 from enum import Enum
 from ..audio.handler import AudioHandler
+from .runtime import SessionAudio, construction_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,10 @@ class PhoneTree:
         self.options = options or {}
         self.action = action
         self.timeout = timeout
-        self.audio_handler = audio_handler if audio_handler is not None else AudioHandler()
+        if audio_handler is None:
+            runtime = construction_runtime()
+            audio_handler = SessionAudio(runtime, runtime.session) if runtime and runtime.session else AudioHandler()
+        self.audio_handler = audio_handler
         self.extension_mode = extension_mode
         self.extension_length = extension_length
         self.extension_terminator = extension_terminator
@@ -181,8 +185,8 @@ class PhoneTree:
     def _play_prompt(self, blocking: bool = False) -> None:
         """Play this node's audio or speech prompt."""
         if self.audio_file:
-            self.audio_handler.play_file(self.audio_file, blocking=blocking)
-            return
+            if self.audio_handler.play_file(self.audio_file, blocking=blocking):
+                return
 
         if self.speech_text and self.speech_handler:
             self.speech_handler.say(self.speech_text, blocking=blocking)
@@ -211,7 +215,8 @@ class PhoneTree:
 
     def _collect_extension(self,
                           input_queue: queue.Queue,
-                          hook_status: Callable) -> Optional[str]:
+                          hook_status: Callable,
+                          first_digit: Optional[str] = None) -> Optional[str]:
         """
         Collect multi-digit extension input.
 
@@ -233,31 +238,36 @@ class PhoneTree:
             # Check for timeout since last input
             if buffer and time.time() - last_input_time > self.extension_timeout:
                 extension = ''.join(buffer)
-                logger.info(f"Extension timeout - auto-submitting: {extension}")
+                logger.info("Extension timeout; submitting buffered input")
                 return extension
 
             try:
-                digit = input_queue.get(timeout=0.1)
+                if first_digit is not None:
+                    digit, first_digit = first_digit, None
+                else:
+                    digit = input_queue.get(timeout=0.1)
+                if not hook_status():
+                    return None
 
                 # Check for terminator
                 if digit == self.extension_terminator:
                     extension = ''.join(buffer)
-                    logger.info(f"Extension terminated with '{self.extension_terminator}': {extension}")
+                    logger.info("Extension entry terminated")
                     return extension if extension else None
 
                 # Validate digit (allow 0-9, *, but not the terminator)
                 if digit in '0123456789*':
                     buffer.append(digit)
                     last_input_time = time.time()
-                    logger.debug(f"Extension buffer: {''.join(buffer)}")
+                    logger.debug("Extension input buffered")
 
                     # Check if we've reached fixed length
                     if self.extension_length and len(buffer) >= self.extension_length:
                         extension = ''.join(buffer)
-                        logger.info(f"Extension complete (fixed length {self.extension_length}): {extension}")
+                        logger.info("Fixed-length extension entry complete")
                         return extension
                 else:
-                    logger.warning(f"Invalid digit in extension: {digit}")
+                    logger.warning("Invalid keypad event in extension entry")
 
             except queue.Empty:
                 continue
@@ -290,7 +300,13 @@ class PhoneTree:
             while self._is_prompt_playing() and hook_status():
                 time.sleep(0.1)
 
+            if not hook_status():
+                self._stop_prompt()
+                return
             continue_nav = self.action()
+            if not hook_status():
+                self._stop_prompt()
+                return
             if not continue_nav:
                 if main_menu and main_menu is not self:
                     main_menu.navigate(input_queue, hook_status, main_menu)
@@ -305,12 +321,12 @@ class PhoneTree:
 
                 if next_extension and next_extension in main_menu.options:
                     # Navigate to next extension
-                    logger.info(f"Continuous dialing: navigating to extension {next_extension}")
+                    logger.info("Continuous dialing; navigating to matched extension")
                     main_menu.options[next_extension].navigate(input_queue, hook_status, main_menu)
                     return
                 elif next_extension:
                     # Invalid extension entered
-                    logger.info(f"Invalid extension during continuous dialing: {next_extension}")
+                    logger.info("Invalid extension during continuous dialing")
                     self.audio_handler.play_file("prompts/invalid_extension.mp3", blocking=True)
                 # else: next_extension is None (0 pressed or audio finished with no input) -> return to menu
             else:
@@ -321,14 +337,18 @@ class PhoneTree:
                         digit = input_queue.get(timeout=0.1)
                         if digit == return_key:
                             self._stop_prompt()
-                            logger.info(f"Return key '{return_key}' pressed during playback")
+                            logger.info("Return-to-menu requested during playback")
                             break
                     except queue.Empty:
                         pass
 
-            if main_menu:
-                time.sleep(2)
-                main_menu.navigate(input_queue, hook_status, main_menu)
+            if main_menu and hook_status():
+                # A cancellable pause avoids delaying escape/hangup by two seconds.
+                deadline = time.monotonic() + 2
+                while hook_status() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                if hook_status():
+                    main_menu.navigate(input_queue, hook_status, main_menu)
             return
 
         # Wait for input (allow interrupting audio)
@@ -349,7 +369,7 @@ class PhoneTree:
                                     start_time: float) -> None:
         """Handle navigation in single-digit mode (original behavior)."""
         while hook_status():  # Continue while phone is off hook
-            if time.time() - start_time > self.timeout:
+            if time.time() - start_time >= self.timeout:
                 logger.info("Timeout reached")
                 self._stop_prompt()  # Stop any playing prompt
                 self.audio_handler.play_file("prompts/timeout.mp3")
@@ -365,6 +385,9 @@ class PhoneTree:
             try:
                 # Check for input with short timeout for faster response
                 choice = input_queue.get(timeout=0.1)
+                if not hook_status():
+                    self._stop_prompt()
+                    return
 
                 # Check if audio was playing when button was pressed
                 audio_was_playing = self._is_prompt_playing()
@@ -372,7 +395,7 @@ class PhoneTree:
                 # Button pressed - stop prompt immediately
                 if audio_was_playing:
                     self._stop_prompt()
-                    logger.info(f"Prompt interrupted by button press: {choice}")
+                    logger.info("Prompt interrupted by keypad input")
 
                 if choice in self.options:
                     option = self.options[choice]
@@ -388,7 +411,7 @@ class PhoneTree:
                         time.sleep(0.5)
                     else:
                         # Audio was interrupted - just log and replay menu (no error message)
-                        logger.info(f"Invalid option {choice} pressed during audio playback - skipping error message")
+                        logger.info("Unmatched menu input during playback; skipping error message")
 
                     # Clear queue to prevent queued presses
                     cleared_count = 0
@@ -418,7 +441,7 @@ class PhoneTree:
         """Handle navigation in extension mode (multi-digit input)."""
         while hook_status():
             # Overall timeout check
-            if time.time() - start_time > self.timeout:
+            if time.time() - start_time >= self.timeout:
                 logger.info("Overall timeout reached in extension mode")
                 self._stop_prompt()
                 self.audio_handler.play_file("prompts/timeout.mp3")
@@ -431,20 +454,23 @@ class PhoneTree:
                     continue
                 return
 
-            # Stop prompt on first keypress to allow silent extension entry
+            # Keep the first digit locally rather than requeueing behind later digits.
+            first_digit = None
             if self._is_prompt_playing():
                 # Wait briefly for first digit
                 try:
                     first_digit = input_queue.get(timeout=0.1)
                     self._stop_prompt()
                     logger.info("Prompt stopped - beginning extension collection")
-                    # Put the digit back for _collect_extension to process
-                    input_queue.put(first_digit)
+                    # _collect_extension consumes this digit before the remaining queue.
                 except queue.Empty:
                     continue
 
             # Collect extension
-            extension = self._collect_extension(input_queue, hook_status)
+            extension = self._collect_extension(input_queue, hook_status, first_digit)
+            if not hook_status():
+                self._stop_prompt()
+                return
 
             if not extension:
                 # Empty input - replay prompt
@@ -455,13 +481,13 @@ class PhoneTree:
 
             # Check if extension matches an option
             if extension in self.options:
-                logger.info(f"Extension matched: {extension}")
+                logger.info("Extension matched")
                 option = self.options[extension]
                 option.navigate(input_queue, hook_status, self._child_main_menu(option, main_menu))
                 return
             else:
                 # Invalid extension
-                logger.info(f"Invalid extension: {extension}")
+                logger.info("Invalid extension")
                 self.audio_handler.play_file("prompts/invalid_extension.mp3", blocking=True)
                 time.sleep(0.5)
 
@@ -491,7 +517,7 @@ class PhoneTree:
 
         while hook_status():
             # Overall timeout check
-            if time.time() - start_time > self.timeout:
+            if time.time() - start_time >= self.timeout:
                 if self._handle_timeout(main_menu, input_queue, hook_status):
                     return
                 start_time = time.time()
@@ -500,6 +526,9 @@ class PhoneTree:
             # Poll for input
             try:
                 digit = input_queue.get(timeout=0.1)
+                if not hook_status():
+                    self._stop_prompt()
+                    return
 
                 # PRIORITY 1: If in extension mode, handle as extension digit
                 if context.in_extension_mode:
@@ -556,7 +585,7 @@ class PhoneTree:
         # Stop prompt if playing
         if audio_was_playing:
             self._stop_prompt()
-            logger.info(f"Prompt interrupted by button press: {digit}")
+            logger.info("Prompt interrupted by keypad input")
 
         # Validate option
         if digit in self.options:
@@ -581,13 +610,13 @@ class PhoneTree:
         """Process digit in extension collection mode"""
         # Validate digit
         if digit not in '0123456789*#':
-            logger.warning(f"Invalid digit in extension: {digit}")
+            logger.warning("Invalid keypad event in extension entry")
             return
 
         # Add to buffer
         context.digit_buffer.append(digit)
         context.last_input_time = time.time()
-        logger.debug(f"Extension buffer: {''.join(context.digit_buffer)}")
+        logger.debug("Extension input buffered")
 
         # Check if complete
         if self._is_extension_complete(context.digit_buffer, digit):
@@ -614,7 +643,7 @@ class PhoneTree:
                             hook_status: Callable,
                             main_menu: Optional['PhoneTree']) -> None:
         """Submit extension and navigate"""
-        logger.info(f"Extension submitted: {extension}")
+        logger.info("Extension submitted")
 
         # Validate extension
         if extension and extension in self.options:
@@ -627,7 +656,7 @@ class PhoneTree:
             option.navigate(input_queue, hook_status, self._child_main_menu(option, main_menu))
         else:
             # Invalid extension
-            logger.info(f"Invalid extension: {extension}")
+            logger.info("Invalid extension")
             self.audio_handler.play_file("prompts/invalid_extension.mp3", blocking=True)
 
             # Clear state and replay menu
@@ -728,7 +757,7 @@ class PhoneTree:
                 if buffer:
                     # User started dialing - auto-submit partial buffer
                     extension = ''.join(buffer)
-                    logger.info(f"Audio finished, partial buffer auto-submit: {extension}")
+                    logger.info("Audio finished; submitting partial extension input")
                     return extension
                 else:
                     # No input - return to menu
@@ -743,14 +772,14 @@ class PhoneTree:
                 return_key = getattr(main_menu, 'return_to_menu_key', '0') if main_menu else '0'
                 if digit == return_key:
                     self.audio_handler.stop()
-                    logger.info(f"Return key '{return_key}' pressed during playback")
+                    logger.info("Return-to-menu requested during playback")
                     return None  # Signal to return to menu
 
                 # Validate and add to buffer
                 if digit in '0123456789*#':
                     buffer.append(digit)
                     last_input_time = time.time()
-                    logger.debug(f"Continuous dial buffer: {''.join(buffer)}")
+                    logger.debug("Continuous dial input buffered")
 
                     # Check if complete (use main_menu's settings)
                     extension_length = getattr(main_menu, 'extension_length', None) if main_menu else None
@@ -769,7 +798,7 @@ class PhoneTree:
 
                         extension = ''.join(buffer)
                         self.audio_handler.stop()  # STOP current audio
-                        logger.info(f"Complete extension during playback: {extension}")
+                        logger.info("Complete extension entered during playback")
                         return extension
 
             except queue.Empty:
@@ -778,7 +807,7 @@ class PhoneTree:
                 if buffer and time.time() - last_input_time > extension_timeout:
                     extension = ''.join(buffer)
                     self.audio_handler.stop()
-                    logger.info(f"Extension timeout during playback: {extension}")
+                    logger.info("Extension timeout during playback")
                     return extension
                 continue
 
