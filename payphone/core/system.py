@@ -1,236 +1,211 @@
-#!/usr/bin/env python3
-"""
-Base class for payphone systems.
-
-This provides the core functionality for running a payphone system,
-while allowing subclasses to define their own phone tree structure.
-"""
+"""Payphone plugin base with shared, cancellable hardware/audio ownership."""
 import logging
 import queue
-import signal
 import threading
-import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from ..audio.handler import AudioHandler
+from ..audio.speech import OfflineSpeech
 from ..config.settings import Config
 from ..hardware.gpio_handler import GPIOHandler
 from ..hardware.serial_handler import SerialHandler
 from .phone_tree import PhoneTree
+from .runtime import PhoneRuntime, SessionAudio, SessionHardware, construction_runtime, shared_runtime
 
 logger = logging.getLogger(__name__)
 
 
 class PhoneSystemBase(ABC):
-    """
-    Abstract base class for payphone systems.
-
-    Subclasses must implement setup_phone_tree() to define
-    the phone menu structure.
-
-    Example:
-        class MyPhoneSystem(PhoneSystemBase):
-            def setup_phone_tree(self) -> PhoneTree:
-                return PhoneTree(
-                    "welcome.mp3",
-                    audio_handler=self.audio_handler,
-                    options={
-                        "1": PhoneTree("option1.mp3", audio_handler=self.audio_handler)
-                    }
-                )
-    """
+    """Plugins keep their existing (config) constructor and setup_phone_tree API."""
 
     def __init__(self, config: Optional[Config] = None):
-        """
-        Initialize the phone system.
-
-        Args:
-            config: Optional Config object. If not provided, uses default Config().
-        """
         self.config = config or Config()
-        self.audio_handler = AudioHandler(self.config.AUDIO_DIR)
-        self.phone_on_hook = True
+        runtime = construction_runtime()
+        self._owns_runtime = runtime is None
+        if runtime is None:
+            audio = AudioHandler(self.config.AUDIO_DIR)
+            if self.config.USE_GPIO:
+                # Raw GPIO never plays tones or logs digits (PINs travel here too).
+                hardware = GPIOHandler(
+                    keypad_rows=self.config.KEYPAD_ROW_PINS,
+                    keypad_cols=self.config.KEYPAD_COL_PINS,
+                    hook_pin=self.config.HOOK_SWITCH_PIN,
+                    audio_handler=None,
+                )
+            else:
+                hardware = SerialHandler(port=self.config.SERIAL_PORT, baudrate=self.config.BAUDRATE)
+            runtime = PhoneRuntime(hardware, audio)
+            runtime.speech = OfflineSpeech(runtime)
+        self.runtime = runtime
+        self._session = None
+        self._phone_on_hook = True
+        self.hardware_handler = runtime.hardware
+        self.audio_handler = runtime.audio
         self.running = True
         self.current_call = None
+        self._call_lock = threading.RLock()
+        self._call_running = False
+        self._pending_pickup = False
+        self.tts = runtime.speech
+        self.tts_available = bool(runtime.speech and runtime.speech.executable)
+        if not self._owns_runtime and runtime.session:
+            self._bind_session(runtime.session)
 
-        # Initialize hardware handler based on config
-        if self.config.USE_GPIO:
-            logger.info("Using GPIO mode (direct Raspberry Pi connection)")
-            self.hardware_handler = GPIOHandler(
-                keypad_rows=self.config.KEYPAD_ROW_PINS,
-                keypad_cols=self.config.KEYPAD_COL_PINS,
-                hook_pin=self.config.HOOK_SWITCH_PIN,
-                audio_handler=self.audio_handler  # Pass audio handler for DTMF tones
-            )
-        else:
-            logger.info("Using Serial mode (Arduino connection)")
-            self.hardware_handler = SerialHandler(
-                port=self.config.SERIAL_PORT,
-                baudrate=self.config.BAUDRATE
-            )
+    def _bind_session(self, session) -> None:
+        self._session = session
+        self.hardware_handler = SessionHardware(session)
+        self.audio_handler = SessionAudio(self.runtime, session)
 
-        self.tts = self._init_tts()
-        self.tts_available = self.tts is not None
+    @property
+    def phone_on_hook(self) -> bool:
+        # Legacy __new__-based plugins/tests can still set/read this attribute.
+        if getattr(self, "_session", None) is not None:
+            return not self.runtime.is_active(self._session)
+        return getattr(self, "_phone_on_hook", True)
 
-    def _init_tts(self):
-        """Initialize an optional pyttsx3 text-to-speech engine."""
-        try:
-            import pyttsx3
-        except ImportError:
-            logger.info("pyttsx3 not available - TTS disabled")
-            return None
+    @phone_on_hook.setter
+    def phone_on_hook(self, value: bool) -> None:
+        self._phone_on_hook = value
 
-        try:
-            return pyttsx3.init()
-        except Exception as exc:
-            logger.warning("Could not initialize TTS: %s", exc)
-            return None
+    def is_call_active(self) -> bool:
+        return not self.phone_on_hook and getattr(self, "running", True)
 
     def say(self, text: str, blocking: bool = True) -> None:
-        """Speak text with the configured TTS engine when available."""
-        if not self.tts_available or self.tts is None:
-            logger.info("TTS unavailable: %s", text)
-            return
+        if self._session and self.is_call_active():
+            capability = self._session.admin_session
+            if capability:
+                capability.require_authorized()
+            # Admin speech never hides inactivity expiry behind a blocking join.
+            self.runtime.speech.say(text, self._session, blocking=blocking and capability is None)
+            if blocking and capability:
+                try:
+                    while self.is_call_active() and self.runtime.speech.is_speaking():
+                        capability.require_authorized()
+                        self._session.cancelled.wait(0.05)
+                    capability.require_authorized()
+                except PermissionError:
+                    self.runtime.speech.stop_speech()
+                    raise
 
-        try:
-            self.tts.say(text)
-            if blocking:
-                self.tts.runAndWait()
-        except Exception as exc:
-            logger.error("TTS error: %s", exc)
+    def speak(self, text: str) -> None:
+        self.say(text, blocking=True)
+
+    def stop_speech(self) -> None:
+        self.runtime.speech.stop_speech()
+
+    def is_speaking(self) -> bool:
+        return self.is_call_active() and self.runtime.speech.is_speaking()
 
     @abstractmethod
     def setup_phone_tree(self) -> PhoneTree:
-        """
-        Build the phone menu tree.
+        """Build a public call tree using this system's bound handlers."""
+        raise NotImplementedError
 
-        This method must be implemented by subclasses to define the
-        menu structure for their specific phone system.
+    def setup_admin_tree(self, admin_session) -> Optional[PhoneTree]:
+        """Optional authenticated administration; never invoked on public paths."""
+        return None
 
-        Returns:
-            PhoneTree: The root node of the phone tree
+    def hook_status_changed(self, off_hook: bool) -> None:
+        with self._call_lock:
+            was_off_hook = self.runtime.off_hook
+            self.runtime.off_hook = off_hook
+            self._phone_on_hook = not off_hook
+            if off_hook:
+                if self._call_running and not was_off_hook:
+                    self._pending_pickup = True
+                self.start_call()
+            else:
+                self._pending_pickup = False
+                self.end_call()
 
-        Example:
-            def setup_phone_tree(self) -> PhoneTree:
-                audio = self.audio_handler
+    def start_call(self) -> bool:
+        """Never overlap consumers, including when a cancelled action refuses exit."""
+        if not self._owns_runtime:
+            raise RuntimeError("Shared plugins may not start independent call threads")
+        with self._call_lock:
+            if self._call_running:
+                # Hook callbacks retain pending pickup; direct starts never create
+                # another consumer while the old navigation is unwinding.
+                return False
+            if not self.running or not self.runtime.off_hook:
+                return False
+            self.runtime.start_dispatcher()
+            self._bind_session(self.runtime.new_session())
+            self._pending_pickup = False
+            self._call_running = True
+            self.current_call = threading.Thread(target=self._run_call, name="payphone-call", daemon=True)
+            self.current_call.start()
+            return True
 
-                main_menu = PhoneTree(
-                    "menu/main.mp3",
-                    audio_handler=audio,
-                    options={
-                        "1": PhoneTree("menu/option1.mp3", audio_handler=audio),
-                        "2": PhoneTree("menu/option2.mp3", audio_handler=audio)
-                    }
-                )
+    def _run_call(self) -> None:
+        while True:
+            try:
+                with shared_runtime(self.runtime):
+                    self._call_handler()
+            except Exception:
+                logger.exception("Call navigation failed")
+            finally:
+                with self._call_lock:
+                    self.runtime.cancel("call ended")
+                    restart = self._pending_pickup and self.running and self.runtime.off_hook
+                    self._pending_pickup = False
+                    if restart:
+                        self._bind_session(self.runtime.new_session())
+                    else:
+                        self._call_running = False
+            if not restart:
+                return
 
-                return main_menu
-        """
-        pass
-
-    def hook_status_changed(self, off_hook: bool):
-        """Handle hook switch changes"""
-        self.phone_on_hook = not off_hook
-
-        if off_hook:
-            logger.info("Phone picked up")
-            self.start_call()
-        else:
-            logger.info("Phone hung up")
-            self.end_call()
-
-    def start_call(self):
-        """Start a new call session"""
-        self.audio_handler.play_file("prompts/dial_tone.mp3", blocking=False)
-        time.sleep(1)
-        self.audio_handler.stop()
-
-        # Start navigation in new thread
-        self.current_call = threading.Thread(
-            target=self._call_handler
-        )
-        self.current_call.start()
-
-    def _call_handler(self):
-        """Handle the call navigation"""
+    def _call_handler(self) -> None:
         main_menu = self.setup_phone_tree()
-        main_menu.navigate(
-            self.hardware_handler.input_queue,
-            lambda: not self.phone_on_hook,
-            main_menu
-        )
+        main_menu.navigate(self.hardware_handler.input_queue, self.is_call_active, main_menu)
 
     def clear_input_queue(self) -> int:
-        """Remove all pending keypad events from the hardware input queue.
-
-        Returns:
-            int: Number of queued keypresses removed.
-        """
-        cleared_count = 0
-        while not self.hardware_handler.input_queue.empty():
+        # The dispatcher alone reads raw hardware input, even before first pickup.
+        if getattr(self, "_session", None) is None:
+            return 0
+        cleared = 0
+        while True:
             try:
                 self.hardware_handler.input_queue.get_nowait()
-                cleared_count += 1
+                cleared += 1
             except queue.Empty:
-                break
+                return cleared
 
-        if cleared_count > 0:
-            logger.debug("Cleared %s keypresses from input queue", cleared_count)
-
-        return cleared_count
-
-    def end_call(self):
-        """End current call"""
-        self.audio_handler.stop()
+    def end_call(self) -> None:
+        self.runtime.cancel("hangup")
         self.clear_input_queue()
+        # Hook callbacks must remain available while plugins cooperatively unwind.
 
-        # Wait for call thread to finish
-        if self.current_call and self.current_call.is_alive():
-            self.current_call.join(timeout=2.0)
-
-    def run(self):
-        """Main application loop"""
-        # Setup hardware communication
-        self.hardware_handler.set_hook_callback(self.hook_status_changed)
-        if not self.hardware_handler.start():
+    def run(self) -> None:
+        if not self._owns_runtime:
+            raise RuntimeError("Only the runtime owner can start hardware")
+        self.runtime.start_dispatcher()
+        self.runtime.hardware.set_hook_callback(self.hook_status_changed)
+        if not self.runtime.hardware.start():
             logger.error("Failed to start hardware communication")
+            self.shutdown()
             return
-
-        logger.info("Payphone system started")
-
-        # Keep running until interrupted
         try:
             while self.running:
                 threading.Event().wait(1)
         except KeyboardInterrupt:
             self.shutdown()
 
-    def shutdown(self):
-        """Cleanup and shutdown"""
-        logger.info("Shutting down...")
+    def shutdown(self) -> None:
         self.running = False
-
-        # Signal phone is on hook to exit navigation loops
-        self.phone_on_hook = True
-
-        # Stop audio playback
-        self.audio_handler.stop()
-
-        # Wait for call thread to finish
-        if self.current_call and self.current_call.is_alive():
-            logger.info("Waiting for call thread to finish...")
-            self.current_call.join(timeout=3.0)
+        if not self._owns_runtime:
+            return
+        self.runtime.off_hook = False
+        self.runtime.stop()
+        if self.current_call and self.current_call is not threading.current_thread():
+            self.current_call.join(timeout=3)
             if self.current_call.is_alive():
-                logger.warning("Call thread did not exit cleanly")
-
-        # Stop hardware and cleanup
-        self.hardware_handler.stop()
-
-        # Quit pygame last (after all threads are stopped)
+                logger.error("Cancelled navigation did not exit; runtime remains closed")
+        self.runtime.hardware.stop()
         try:
             import pygame
             pygame.quit()
-        except:
-            pass
-
-        logger.info("Shutdown complete")
+        except Exception:
+            logger.exception("Audio shutdown failed")
