@@ -5,11 +5,35 @@ Tests multi-digit extension input, validation, collection,
 and navigation in extension mode.
 """
 
-import pytest
+import time
+from itertools import chain, repeat
+from types import SimpleNamespace
 from unittest.mock import Mock
 from queue import Queue
-import time
+
+import pytest
 from payphone.core.phone_tree import PhoneTree
+
+
+@pytest.fixture(autouse=True)
+def fast_time(monkeypatch):
+    """Remove real sleeps from navigation loops to keep tests fast."""
+    monkeypatch.setattr(
+        "payphone.core.phone_tree.time",
+        SimpleNamespace(time=time.time, sleep=lambda *_: None),
+    )
+
+
+def on_hook_for(seconds: float):
+    """Return a hook_status that stays off hook for a bounded time."""
+    deadline = time.time() + seconds
+    return lambda: time.time() < deadline
+
+
+def finite_hook(true_calls: int = 3):
+    """Return a hook_status that goes on hook after true_calls checks."""
+    states = chain([True] * true_calls, repeat(False))
+    return lambda: next(states, False)
 
 
 @pytest.fixture
@@ -153,7 +177,7 @@ class TestPhoneTreeExtensionCollection:
         input_queue.put('0')
         input_queue.put('1')
 
-        hook_status = Mock(side_effect=[True] * 50 + [False])  # Stay on hook, then hang up
+        hook_status = on_hook_for(1.5)  # Stay on hook for a bounded time, then hang up
 
         tree.navigate(input_queue, hook_status, tree)
 
@@ -178,7 +202,7 @@ class TestPhoneTreeExtensionCollection:
         input_queue.put('0')
         input_queue.put('#')
 
-        hook_status = Mock(side_effect=[True] * 50 + [False])
+        hook_status = on_hook_for(1.5)
 
         tree.navigate(input_queue, hook_status, tree)
 
@@ -207,7 +231,7 @@ class TestPhoneTreeExtensionCollection:
         input_queue.put('0')
         input_queue.put('1')
 
-        hook_status = Mock(side_effect=[True] * 100 + [False])
+        hook_status = on_hook_for(2.0)
 
         tree.navigate(input_queue, hook_status, tree)
 
@@ -222,7 +246,7 @@ class TestPhoneTreeExtensionNavigation:
 
     def test_extension_mode_stops_audio_on_first_digit(self, mock_audio):
         """Test that audio stops when first digit is pressed"""
-        mock_audio.is_playing.side_effect = [True, True, False]  # Playing, then stopped
+        mock_audio.is_playing.side_effect = chain([True], repeat(False))  # Playing until stopped
 
         tree = PhoneTree(
             audio_file="menu/directory.mp3",
@@ -239,7 +263,7 @@ class TestPhoneTreeExtensionNavigation:
         input_queue.put('0')
         input_queue.put('1')
 
-        hook_status = Mock(side_effect=[True] * 50 + [False])
+        hook_status = on_hook_for(1.5)
 
         tree.navigate(input_queue, hook_status, tree)
 
@@ -277,7 +301,7 @@ class TestPhoneTreeExtensionNavigation:
         input_queue.put('0')
         input_queue.put('1')
 
-        hook_status = Mock(side_effect=[True] * 15 + [False])
+        hook_status = on_hook_for(2.5)
 
         main_menu.navigate(input_queue, hook_status, main_menu)
 
@@ -304,7 +328,7 @@ class TestPhoneTreeExtensionNavigation:
         input_queue.put('0')
         input_queue.put('#')
 
-        hook_status = Mock(side_effect=[True] * 100 + [False])
+        hook_status = on_hook_for(2.0)
 
         tree.navigate(input_queue, hook_status, tree)
 
@@ -354,7 +378,7 @@ class TestPhoneTreeExtensionEdgeCases:
         )
 
         input_queue = Queue()
-        hook_status = Mock(side_effect=[True, True, False])
+        hook_status = finite_hook(2)
 
         tree.navigate(input_queue, hook_status, tree)
 
