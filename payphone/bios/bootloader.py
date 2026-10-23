@@ -3,12 +3,16 @@ BIOS Bootloader system for payphone.
 
 Provides system selection menu, configuration, and hot-reloading capabilities.
 Supports:
-- Pick up handset to enter BIOS menu by default
+- Pick up handset to enter BIOS menu (default)
 - Long-press * for 5 seconds during system operation to return to BIOS
-- Auto-launch last selected system
+- Optional legacy auto-launch of the last selected system
 - Dynamic discovery and loading of phone systems
+
+A launched system shares the BIOS's hardware and audio handlers, so it reads
+the same keypad input queue the BIOS started and inherits the off-hook state.
 """
 
+import inspect
 import logging
 import queue
 import threading
@@ -106,15 +110,14 @@ class BIOSBootloader(PhoneSystemBase):
             self.phone_on_hook = True
             self.hook_pickup_time = None
 
-            # Stop any running call/system
-            if self.current_call and self.current_call.is_alive():
-                self.end_call()
-
-            # Stop current system if running
+            # Stop current system first so its navigate() loop sees on-hook,
+            # then wait for the call thread to finish.
             if self.current_system:
                 logger.info("Stopping current system due to hang-up")
-                self.current_system.running = False
-                self.current_system = None
+                self._stop_current_system()
+
+            if self.current_call and self.current_call.is_alive():
+                self.end_call()
 
     def auto_launch_system(self):
         """Auto-launch the last selected system if configured"""
@@ -155,9 +158,9 @@ class BIOSBootloader(PhoneSystemBase):
             logger.error(f"Failed to load system: {system_id}")
             return False
 
-        # Instantiate the system
+        # Instantiate the system around the BIOS's live handlers
         try:
-            self.current_system = system_class(self.config)
+            self.current_system = self._instantiate_system(system_class)
             self.current_system_id = system_id
             self.bios_config.set_last_system(system_id)
             self.in_bios_menu = False
@@ -174,6 +177,70 @@ class BIOSBootloader(PhoneSystemBase):
         except Exception as e:
             logger.error(f"Error launching system {system_id}: {e}", exc_info=True)
             return False
+
+    def _instantiate_system(self, system_class: type) -> PhoneSystemBase:
+        """
+        Construct a phone system that shares the BIOS's hardware and audio handlers.
+
+        The BIOS owns the started hardware handler (the keypad feeds its
+        input_queue) and the audio handler. A system built with
+        ``system_class(config)`` would get fresh, never-started handlers and
+        ``phone_on_hook=True``: its menu would exit immediately and every
+        keypress would stay in the BIOS queue. Inject our handlers through the
+        constructor when it accepts them (PhoneSystemBase and TDTM do), else
+        swap them in after construction.
+
+        Args:
+            system_class: PhoneSystemBase subclass loaded by SystemManager
+
+        Returns:
+            Instance wired to self.hardware_handler / self.audio_handler and
+            carrying the BIOS's current hook state.
+        """
+        if self._accepts_injected_handlers(system_class):
+            system = system_class(
+                self.config,
+                hardware_handler=self.hardware_handler,
+                audio_handler=self.audio_handler,
+            )
+        else:
+            logger.warning(
+                f"{system_class.__name__} does not accept hardware_handler/audio_handler; "
+                "replacing its handlers after construction"
+            )
+            system = system_class(self.config)
+            # The handlers it built were never started; do not stop() them, a
+            # GPIO cleanup would tear down the pins the shared handler uses.
+            system.hardware_handler = self.hardware_handler
+            system.audio_handler = self.audio_handler
+
+        system.phone_on_hook = self.phone_on_hook
+        system.running = True
+        return system
+
+    @staticmethod
+    def _accepts_injected_handlers(system_class: type) -> bool:
+        """Return True if system_class.__init__ takes hardware_handler and audio_handler."""
+        try:
+            parameters = inspect.signature(system_class.__init__).parameters
+        except (TypeError, ValueError):
+            return False
+        if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+            return True
+        return {"hardware_handler", "audio_handler"} <= set(parameters)
+
+    def _stop_current_system(self) -> None:
+        """Tell the launched system to stop and forget it.
+
+        Its _call_handler polls ``phone_on_hook`` (not ``running``), so both
+        flags are set to end its navigation loop.
+        """
+        system = self.current_system
+        if system is None:
+            return
+        system.running = False
+        system.phone_on_hook = True
+        self.current_system = None
 
     def start_long_press_monitor(self):
         """Start monitoring for long-press * to return to BIOS"""
@@ -210,7 +277,7 @@ class BIOSBootloader(PhoneSystemBase):
 
                                 # Stop current system
                                 if self.current_system:
-                                    self.current_system.running = False
+                                    self._stop_current_system()
                                     self.end_call()
 
                                 # Return to BIOS menu
@@ -308,9 +375,12 @@ class BIOSBootloader(PhoneSystemBase):
                 # Show BIOS menu
                 logger.info("Starting BIOS menu navigation")
                 main_menu = self.setup_phone_tree()
+                # Stop navigating the BIOS menu as soon as a system is launched,
+                # otherwise this loop keeps consuming keypresses from the shared
+                # input queue alongside the launched system.
                 main_menu.navigate(
                     self.hardware_handler.input_queue,
-                    lambda: not self.phone_on_hook and self.running,
+                    lambda: not self.phone_on_hook and self.running and self.in_bios_menu,
                     main_menu
                 )
             elif self.current_system:
@@ -335,9 +405,7 @@ class BIOSBootloader(PhoneSystemBase):
             self.long_press_monitor_thread.join(timeout=2)
 
         # Stop current system
-        if self.current_system:
-            self.current_system.running = False
-            self.current_system = None
+        self._stop_current_system()
 
         # Call parent shutdown
         super().shutdown()

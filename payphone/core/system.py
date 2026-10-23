@@ -41,21 +41,36 @@ class PhoneSystemBase(ABC):
                 )
     """
 
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        *,
+        hardware_handler=None,
+        audio_handler=None,
+    ):
         """
         Initialize the phone system.
 
         Args:
             config: Optional Config object. If not provided, uses default Config().
+            hardware_handler: Optional keypad/hook handler to reuse instead of
+                constructing a new GPIO or serial handler. The BIOS bootloader
+                passes its own, already-started handler so a launched system
+                reads the live keypad input queue.
+            audio_handler: Optional AudioHandler to reuse instead of opening the
+                audio device a second time.
         """
         self.config = config or Config()
-        self.audio_handler = AudioHandler(self.config.AUDIO_DIR)
+        self.audio_handler = audio_handler if audio_handler is not None else AudioHandler(self.config.AUDIO_DIR)
         self.phone_on_hook = True
         self.running = True
         self.current_call = None
 
-        # Initialize hardware handler based on config
-        if self.config.USE_GPIO:
+        # Initialize hardware handler: reuse an injected one, else build from config
+        if hardware_handler is not None:
+            logger.info("Reusing injected hardware handler")
+            self.hardware_handler = hardware_handler
+        elif self.config.USE_GPIO:
             logger.info("Using GPIO mode (direct Raspberry Pi connection)")
             self.hardware_handler = GPIOHandler(
                 keypad_rows=self.config.KEYPAD_ROW_PINS,

@@ -215,3 +215,15 @@ def test_record_message_cancels_on_zero(tmp_path, monkeypatch):
     assert system.record_message() is True
 
     assert not (system.message_manager.messages_dir / "001.wav").exists()
+
+
+def test_lam_reuses_injected_handlers(hardware_free_phone_systems, tmp_path):
+    from tests.conftest import StubAudioHandler, StubHardwareHandler
+    hardware = StubHardwareHandler()
+    audio = StubAudioHandler()
+
+    system = LAMSystem(hardware_handler=hardware, audio_handler=audio)
+
+    assert system.hardware_handler is hardware
+    assert system.audio_handler is audio
+    assert system.phone_on_hook is True
