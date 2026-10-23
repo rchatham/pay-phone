@@ -264,6 +264,7 @@ class BIOSBootloader(PhoneSystemBase):
 
         # Build menu options. Installed theme packs (theme_path in .bios_config.json)
         # control the ordering; unknown ids fall back to alphabetical order.
+        menu_options: dict[str, PhoneTree] = {}
         theme = load_theme(self.bios_config.get_theme_path())
         order_ids: list[str] = list(theme.get("system_order", [])) if theme else []
         priority = {system_id: index for index, system_id in enumerate(order_ids)}
