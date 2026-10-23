@@ -8,9 +8,14 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
 
 ## Features
 
-### 1. **Auto-Launch with Manual Override**
-- **Normal Boot**: Pick up phone → automatically launches last selected system
-- **BIOS Menu**: Hold handset for 3 seconds after pickup → enter BIOS menu
+### 1. **BIOS Menu on Pickup** (default)
+- **Pick up the handset** → the BIOS menu plays and you dial a digit to launch a system
+- Controlled by `always_show_menu_on_pickup: true` and `auto_launch: false` in `.bios_config.json`
+- **Legacy auto-launch** (opt-in): set `auto_launch: true`, `always_show_menu_on_pickup: false`
+  and `bios_enter_hold_seconds` > 0. Pick up → the last selected system launches after the
+  hold window; keep the handset lifted for `bios_enter_hold_seconds` without hanging up to
+  enter the BIOS menu instead. With the default `bios_enter_hold_seconds: 0.0` the hold
+  check always passes, so legacy mode still opens the menu.
 
 ### 2. **Return to BIOS Anytime**
 - While any system is running, press and hold `*` key for 5 seconds to return to BIOS menu
@@ -33,7 +38,7 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
 ┌─────────────────────────────────────────┐
 │         BIOSBootloader                  │
 │  - Hardware initialization              │
-│  - Hook hold detection (3s)             │
+│  - Pickup → BIOS menu (default)         │
 │  - Long-press * detection (5s)          │
 │  - System discovery & loading           │
 └─────────────────────────────────────────┘
@@ -54,9 +59,9 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
 # Start payphone with BIOS (default)
 payphone
 
-# Pick up phone → last system auto-launches
-# Hold phone for 3s after pickup → BIOS menu
+# Pick up phone → BIOS menu plays, dial 1-9 to launch a system
 # During operation: hold * for 5s → return to BIOS
+# (legacy auto-launch of the last system: see Configuration below)
 ```
 
 ### Legacy Mode (Bypass BIOS)
@@ -88,9 +93,9 @@ Edit `.bios_config.json` in the project root:
 
 **Options:**
 - `last_system`: ID of last selected system (auto-set by BIOS)
-- `auto_launch`: If true, auto-launch last system unless `always_show_menu_on_pickup` is enabled; if false, always show BIOS menu
-- `always_show_menu_on_pickup`: If true, picking up the handset opens the BIOS menu by default
-- `bios_enter_hold_seconds`: Seconds to hold hook to enter BIOS in legacy auto-launch mode (default: 0.0)
+- `auto_launch`: If true, auto-launch last system unless `always_show_menu_on_pickup` is enabled; if false (default), always show the BIOS menu
+- `always_show_menu_on_pickup`: If true (default), picking up the handset opens the BIOS menu immediately
+- `bios_enter_hold_seconds`: Legacy auto-launch mode only. Seconds the handset must stay lifted after pickup to enter the BIOS instead of auto-launching (default: 0.0, which means the BIOS menu always opens; set e.g. 3.0 to actually auto-launch)
 - `bios_exit_long_press_seconds`: Seconds to hold * to return to BIOS (default: 5.0)
 - `scan_paths`: Directories to scan for phone systems
 - `theme_path`: Filesystem path of an installed BIOS theme pack (contains `theme/theme.json`); empty for the default theme
@@ -168,7 +173,7 @@ The BIOS will:
 
 Create these audio files in `audio_files/bios/`:
 
-- `main_menu.mp3` - Burning Man themed switchboard prompt, e.g. "Welcome home. You have reached the Black Rock City payphone switchboard..."
+- `main_menu.mp3` - Generic switchboard prompt ("Welcome to payphone BIOS..."); a theme pack overrides it
 - `system_<id>.mp3` - Audio for each discovered system
 
 Also needed in `audio_files/prompts/`:
@@ -180,8 +185,10 @@ Also needed in `audio_files/prompts/`:
 Main bootloader class that:
 - Extends `PhoneSystemBase`
 - Opens BIOS menu on pickup by default, with legacy hook-hold support for auto-launch mode
+- Launches the chosen system on the BIOS's own hardware and audio handlers, so the system
+  reads the same keypad input queue and starts off-hook (see `_instantiate_system`)
 - Monitors for long-press * during operation
-- Manages system launching and switching
+- Manages system launching and switching; hang-up puts the launched system back on hook
 
 ### SystemManager (`system_manager.py`)
 Discovers and loads phone systems:
@@ -215,9 +222,10 @@ Handles persistent configuration:
 
 ### Can't Enter BIOS Menu
 
-- Ensure you're holding handset for full 3 seconds immediately after pickup
-- Check `bios_enter_hold_seconds` in config
-- Try adjusting threshold higher (e.g., 5.0 seconds)
+- With the defaults (`always_show_menu_on_pickup: true`), the menu should play on every pickup;
+  if it doesn't, check the logs for `Error in call handler` and that `audio_files/bios/main_menu.mp3` exists
+- In legacy auto-launch mode, keep the handset lifted for the full `bios_enter_hold_seconds`
+  before the last system starts; raise the value (e.g. 5.0) if the window is too short
 
 ### * Long-Press Not Working
 
