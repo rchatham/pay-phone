@@ -10,6 +10,7 @@ import sys
 import queue
 import threading
 import time
+from typing import Optional
 from pathlib import Path
 
 # Add payphone to path
@@ -28,6 +29,8 @@ class AudioPlayer:
     def __init__(self, audio_dir="audio_files", silent=False):
         self.audio_dir = audio_dir
         self.silent = silent
+        self._recording_initialized = False
+        self.input_queue: Optional[queue.Queue] = None
         if not silent:
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
         logger.info(f"Audio initialized with directory: {audio_dir} (silent={silent})")
@@ -60,6 +63,66 @@ class AudioPlayer:
         except Exception as e:
             logger.error(f"Audio playback error: {e}")
             return False
+
+    def record_audio(self, duration: int, filename: str) -> bool:
+        """Record simulator microphone input to a WAV file for operator/STT testing."""
+        if os.getenv("ENABLE_RECORDING", "").strip().lower() not in {"1", "true", "yes", "on"}:
+            logger.info("Simulator recording disabled. Set ENABLE_RECORDING=true to enable microphone input.")
+            return False
+
+        try:
+            from payphone.audio import recording
+
+            if not self._recording_initialized:
+                recording.init(
+                    preferred_device=os.getenv("RECORDING_DEVICE") or None,
+                    preferred_samplerate=int(os.getenv("RECORDING_SAMPLE_RATE", "44100")),
+                    preferred_channels=int(os.getenv("RECORDING_CHANNELS", "1")),
+                )
+                self._recording_initialized = True
+
+            logger.info("Recording simulator microphone for up to %s seconds to %s. Press # to submit early.", duration, filename)
+            # The simulator owns timeout handling so keypad submission and timeout
+            # both go through finish_recording(). Do not pass timeout through to
+            # the sounddevice callback; stopping the stream from inside the audio
+            # callback can hang on some macOS devices.
+            recording.start_recording(filename, timeout=0)
+            deadline = time.time() + duration
+            while time.time() < deadline:
+                if self._recording_submit_requested():
+                    logger.info("Recording submitted by # key")
+                    break
+                time.sleep(0.05)
+            recording.finish_recording()
+            recorded = os.path.exists(filename) and os.path.getsize(filename) > 0
+            logger.info("Simulator recording finished: %s", "saved" if recorded else "empty")
+            return recorded
+        except Exception as e:
+            logger.error(f"Recording error: {e}", exc_info=True)
+            try:
+                from payphone.audio import recording
+                recording.cancel_recording()
+            except Exception:
+                pass
+            return False
+
+    def _recording_submit_requested(self) -> bool:
+        if self.input_queue is None:
+            return False
+        buffered_keys = []
+        submitted = False
+        while True:
+            try:
+                key = self.input_queue.get_nowait()
+            except queue.Empty:
+                break
+            if key == '#':
+                submitted = True
+                break
+            buffered_keys.append(key)
+        for key in buffered_keys:
+            self.input_queue.put(key)
+        return submitted
 
     def stop(self):
         """Stop current playback"""
@@ -138,8 +201,10 @@ class KeyboardInput:
                 break
 
     def set_audio_player(self, audio_player):
-        """Set audio player for DTMF tones"""
+        """Set audio player for DTMF tones and recording submit keys"""
         self.audio_player = audio_player
+        if hasattr(audio_player, 'input_queue'):
+            audio_player.input_queue = self.input_queue
 
 def setup_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
     """Build the phone menu tree"""
@@ -328,9 +393,8 @@ def setup_bios_phone_tree(audio_player: AudioPlayer) -> PhoneTree:
 
     logger.info(f"Discovered {len(systems)} systems for BIOS menu")
 
-    # Build menu options by actually loading each system. Keep a stable TDTM
-    # placeholder slot when its plugin symlink exists but optional dependencies
-    # are missing locally.
+    # Build menu options by actually loading each system. Keep a stable simulator
+    # slot for TDTM when its plugin exists but optional local dependencies are absent.
     from types import SimpleNamespace
     ordered_systems = []
     added_system_ids = set()

@@ -106,9 +106,6 @@ except ImportError:
 # Set PAYPHONE_LEGACY_MODE=<system_id> to bypass BIOS.
 legacy_mode = os.environ.get('PAYPHONE_LEGACY_MODE')
 
-if legacy_mode:
-    logger.info(f"Legacy mode enabled: {legacy_mode}")
-
 
 def _load_legacy_system(system_id: str):
     """Load a configured phone system directly by BIOS system ID."""

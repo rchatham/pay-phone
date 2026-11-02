@@ -41,6 +41,8 @@ sudo apt-get install -y \
     python3-numpy \
     python3-rpi.gpio \
     alsa-utils \
+    portaudio19-dev \
+    libsndfile1 \
     mpg321 \
     git \
     arduino \
@@ -55,7 +57,9 @@ pip3 install --user --break-system-packages \
     RPi.GPIO \
     pytest \
     pytest-cov \
-    mock
+    mock \
+    sounddevice \
+    soundfile
 
 # Configure audio for Audio Injector
 echo "Configuring audio..."
@@ -184,17 +188,23 @@ else
 fi
 
 echo ""
-echo "3. Add audio files to:"
+echo "3. Check microphone input and LAM recording:"
+echo "   arecord -l"
+echo "   arecord --device=hw:0,0 --format S16_LE -V mono --rate 44100 -c1 test.wav"
+echo "   aplay test.wav"
+echo "   ENABLE_RECORDING=true RECORDING_DEVICE=0 python3 ~/payphone/scripts/test_lam_recording.py"
+echo ""
+echo "4. Add audio files to:"
 echo "   ~/payphone/audio_files/"
 echo ""
-echo "4. Deploy configuration from your local machine:"
+echo "5. Deploy configuration from your local machine:"
 echo "   make deploy"
 echo ""
-echo "5. Enable and start service:"
+echo "6. Enable and start service:"
 echo "   sudo systemctl enable payphone.service"
 echo "   sudo systemctl start payphone.service"
 echo ""
-echo "6. Check status:"
+echo "7. Check status:"
 echo "   sudo systemctl status payphone.service"
 echo ""
 echo -e "${YELLOW}IMPORTANT: Reboot required for audio changes to take effect${NC}"

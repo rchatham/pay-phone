@@ -46,9 +46,9 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
         ┌───────────┴───────────┐
         │                       │
 ┌───────▼────────┐    ┌────────▼──────────┐
-│  TDTM System   │    │ Burning Man Info  │
-│ (external repo)│    │ (external repo)   │
-└────────────────┘    └───────────────────┘
+│   Plugin A     │    │  TDTM System     │
+│ (discovered)   │    │  (external repo) │
+└────────────────┘    └──────────────────┘
 ```
 
 ## Usage
@@ -77,7 +77,7 @@ Edit `.bios_config.json` in the project root:
 
 ```json
 {
-  "last_system": "bm-info-line",
+  "last_system": null,
   "auto_launch": false,
   "always_show_menu_on_pickup": true,
   "bios_enter_hold_seconds": 0.0,
