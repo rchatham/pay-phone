@@ -63,8 +63,9 @@ class LAMSystem(PhoneSystemBase):
             "author": "Reid Chatham",
         }
 
-    def __init__(self, config: Optional[Config] = None) -> None:
-        super().__init__(config)
+    def __init__(self, config: Optional[Config] = None, **handlers) -> None:
+        # ``handlers`` carries hardware_handler / audio_handler from the BIOS.
+        super().__init__(config, **handlers)
         self.message_manager = MessageManager(audio_dir=self.config.AUDIO_DIR)
         self.is_recording = False
         self._recording_initialized = False

@@ -74,6 +74,12 @@ make deploy-full
 # Deploy without updating secrets
 ./scripts/deploy_to_pi.sh --skip-secrets
 
+# Preview: show what rsync would transfer/delete on the Pi, change nothing
+./scripts/deploy_to_pi.sh --dry-run
+# Pi-side state (.bios_config.json, audio_files/lam_messages/, *.wav recordings,
+# theme packs installed under plugins/ and audio_files/) is never deleted;
+# see scripts/deploy_protected_paths.rules and docs/DEVELOPMENT.md
+
 # Sync only configuration/secrets
 make sync-secrets
 ./scripts/sync_config.sh

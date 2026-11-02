@@ -8,6 +8,7 @@ provides dynamic loading capabilities.
 import importlib
 import importlib.util
 import inspect
+import json
 import logging
 import re
 import sys
@@ -18,6 +19,27 @@ from typing import Dict, List, Optional, Type, Any
 from ..core.system import PhoneSystemBase
 
 logger = logging.getLogger(__name__)
+
+
+def load_theme(theme_path: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Load a BIOS theme.json from a theme pack path.
+
+    Args:
+        theme_path: Filesystem path of a theme pack repo (contains theme/theme.json).
+
+    Returns:
+        Parsed theme dictionary, or None when no theme is configured or the file
+        cannot be read.
+    """
+    if not theme_path:
+        return None
+
+    for candidate in (Path(theme_path) / "theme" / "theme.json", Path(theme_path) / "theme.json"):
+        try:
+            return json.loads(candidate.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not load theme %s: %s", candidate, exc)
+    return None
 
 
 class SystemInfo:

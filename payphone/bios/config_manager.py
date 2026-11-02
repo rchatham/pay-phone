@@ -26,6 +26,7 @@ class ConfigManager:
             "./phone_systems",
             "./plugins"
         ],
+        "theme_path": "",
         "available_systems": []
     }
 
@@ -102,6 +103,10 @@ class ConfigManager:
     def get_scan_paths(self) -> List[str]:
         """Get list of paths to scan for phone systems"""
         return self.config.get("scan_paths", [])
+
+    def get_theme_path(self) -> str:
+        """Get the filesystem path of the installed BIOS theme pack, if any."""
+        return self.config.get("theme_path", "") or ""
 
     def add_scan_path(self, path: str) -> None:
         """Add a path to scan for phone systems"""

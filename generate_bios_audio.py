@@ -87,6 +87,9 @@ def main():
     print("Discovering phone systems...")
     manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
     systems = manager.discover_systems()
+    if "TDTM" not in systems and Path("plugins/TDTM").exists():
+        from types import SimpleNamespace
+        systems["TDTM"] = SimpleNamespace(name="Talk Dirty To Me")
 
     print(f"Found {len(systems)} systems:")
     for system_id, info in systems.items():
@@ -94,10 +97,12 @@ def main():
     print()
 
     # Generate main menu
-    if systems:
+    ordered_systems = sorted(systems.items(), key=lambda item: item[1].name)
+    if ordered_systems:
         menu_text = "Welcome to payphone BIOS. "
-        for idx, (system_id, info) in enumerate(systems.items(), start=1):
+        for idx, (system_id, info) in enumerate(ordered_systems, start=1):
             menu_text += f"Press {idx} for {info.name}. "
+        menu_text = menu_text.strip()
 
         generate_audio(
             menu_text,
@@ -106,12 +111,12 @@ def main():
     else:
         print("⚠️  No systems found, generating error message only")
         generate_audio(
-            "No phone systems found. Please check configuration.",
-            str(audio_dir / "prompts" / "no_systems.mp3")
+            "Welcome to payphone BIOS. No phone systems found. Please check configuration.",
+            str(audio_dir / "bios" / "main_menu.mp3")
         )
 
     # Generate individual system audio files
-    for system_id, info in systems.items():
+    for system_id, info in ordered_systems:
         generate_audio(
             info.name,
             str(audio_dir / "bios" / f"system_{system_id}.mp3")

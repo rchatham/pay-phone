@@ -19,6 +19,23 @@
 #   ./scripts/deploy_to_pi.sh --no-restart    # Don't restart service after deploy
 #   ./scripts/deploy_to_pi.sh --skip-secrets  # Skip secret injection
 #   ./scripts/deploy_to_pi.sh --full          # Full deploy with dependencies
+#   ./scripts/deploy_to_pi.sh --dry-run       # Show what rsync would change/delete, touch nothing
+#
+# Protected Pi-side state
+#   The sync uses `rsync --delete`, so anything in ~/payphone on the Pi that is
+#   not in this repo would normally be deleted. Two mechanisms prevent that:
+#
+#   1. scripts/deploy_protected_paths.rules (rsync filter file) protects
+#        /.bios_config.json          BIOS last_system / theme_path / scan paths
+#        /audio_files/lam_messages/  Leave a Message caller recordings
+#        /audio_files/**.wav         any recording under audio_files/
+#        /recordings/, /user-instructions/   TDTM recordings
+#   2. Only plugins/<dir> and audio_files/<dir> directories tracked in git are
+#      synced (scripts/deploy_rsync_filters.sh). Theme packs installed on the Pi
+#      with `install.py --copy` (plugins/<pack>/, audio_files/<pack>/) are kept.
+#
+#   Run with --dry-run before deploying to a Pi that has live recordings.
+#   tests/unit/test_deploy_filters.py checks these rules against a local rsync.
 # =============================================================================
 
 set -e
@@ -34,6 +51,7 @@ NC='\033[0m' # No Color
 NO_RESTART=false
 SKIP_SECRETS=false
 FULL_DEPLOY=false
+DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -49,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             FULL_DEPLOY=true
             shift
             ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
         *)
             echo -e "${RED}Unknown option: $1${NC}"
             exit 1
@@ -59,6 +81,9 @@ done
 echo -e "${BLUE}================================================${NC}"
 echo -e "${BLUE}Deploying Payphone to Raspberry Pi${NC}"
 echo -e "${BLUE}================================================${NC}"
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}DRY RUN: nothing will be changed on the Pi${NC}"
+fi
 echo ""
 
 # -----------------------------------------------------------------------------
@@ -118,6 +143,7 @@ echo ""
 
 echo "2. Creating project directory..."
 
+# mkdir -p is idempotent, and rsync needs the destination to exist even for a dry run.
 $SSH_CMD "mkdir -p ~/payphone"
 
 echo -e "${GREEN}✓ Directory created${NC}"
@@ -135,8 +161,23 @@ PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
 cd "$PROJECT_ROOT"
 
+# Protected Pi-side state and tracked-directory filters (see script header).
+# Each line printed by the helper becomes one shell-quoted rsync argument.
+RSYNC_FILTER_ARGS=""
+while IFS= read -r filter_arg; do
+    RSYNC_FILTER_ARGS="$RSYNC_FILTER_ARGS $(printf '%q' "$filter_arg")"
+done < <("$SCRIPT_DIR/deploy_rsync_filters.sh")
+
+RSYNC_MODE_ARGS=""
+if [ "$DRY_RUN" = true ]; then
+    # -n reports what would be transferred/deleted without touching the Pi.
+    RSYNC_MODE_ARGS="--dry-run"
+fi
+
 # Sync files (excluding .git, __pycache__, etc.)
-eval $RSYNC_CMD \
+RSYNC_LOG="$(mktemp -t payphone-deploy)"
+set -o pipefail
+eval $RSYNC_CMD $RSYNC_MODE_ARGS $RSYNC_FILTER_ARGS \
     --exclude='.git' \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
@@ -148,7 +189,23 @@ eval $RSYNC_CMD \
     --exclude='audio_files/*.mp3' \
     --exclude='venv' \
     --exclude='.venv' \
-    ./ ${PI_USER}@${PI_HOST}:~/payphone/
+    ./ ${PI_USER}@${PI_HOST}:~/payphone/ | tee "$RSYNC_LOG"
+set +o pipefail
+
+if [ "$DRY_RUN" = true ]; then
+    echo ""
+    echo -e "${YELLOW}Files rsync would DELETE on the Pi:${NC}"
+    if grep -i "deleting" "$RSYNC_LOG"; then
+        echo -e "${YELLOW}If any of these are Pi-side state, add them to scripts/deploy_protected_paths.rules${NC}"
+    else
+        echo "  (none)"
+    fi
+    rm -f "$RSYNC_LOG"
+    echo ""
+    echo -e "${YELLOW}Dry run complete. Skipped: dependencies, secrets, directories, permissions, restart.${NC}"
+    exit 0
+fi
+rm -f "$RSYNC_LOG"
 
 echo -e "${GREEN}✓ Source code synced${NC}"
 echo ""
