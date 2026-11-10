@@ -45,3 +45,15 @@ class Config:
     # Features
     ENABLE_RECORDING = os.getenv('ENABLE_RECORDING', 'false').lower() == 'true'
     ENABLE_CELLULAR = os.getenv('ENABLE_CELLULAR', 'false').lower() == 'true'
+
+    # VoIP (SIP via a local baresip process; see payphone/voip/)
+    # VOIP_SIP_URI is this phone's address of record, e.g. sip:463@10.0.0.1.
+    # VOIP_REGISTRAR defaults to the host part of VOIP_SIP_URI when empty.
+    VOIP_ENABLED = os.getenv('VOIP_ENABLED', 'false').lower() == 'true'
+    VOIP_SIP_URI = os.getenv('VOIP_SIP_URI', '')
+    VOIP_REGISTRAR = os.getenv('VOIP_REGISTRAR', '')
+    VOIP_PASSWORD = os.getenv('VOIP_PASSWORD', '')
+    # Where baresip's `config` and `accounts` are rendered (baresip -f <dir>).
+    VOIP_CONFIG_DIR = os.getenv(
+        'VOIP_CONFIG_DIR', str(Path(__file__).resolve().parents[2] / '.baresip')
+    )

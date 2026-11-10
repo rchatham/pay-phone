@@ -34,6 +34,8 @@ htmlcov/
 
 # Secrets & Configuration
 .env
+# baresip config rendered by payphone.voip.account (holds the SIP password)
+.baresip/
 .env.local
 .env.*.local
 *.pem
