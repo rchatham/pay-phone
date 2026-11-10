@@ -27,6 +27,7 @@
 #
 #   1. scripts/deploy_protected_paths.rules (rsync filter file) protects
 #        /.bios_config.json          BIOS last_system / theme_path / scan paths
+#        /.baresip/                  baresip config + SIP account (baresip.service)
 #        /audio_files/lam_messages/  Leave a Message caller recordings
 #        /audio_files/**.wav         any recording under audio_files/
 #        /recordings/, /user-instructions/   TDTM recordings

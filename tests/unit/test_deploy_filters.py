@@ -44,6 +44,8 @@ def make_repo_checkout(root: Path) -> Path:
     write(root / "audio_files" / "dtmf" / "1.wav", "tracked tone")
     # A developer's local BIOS config must never reach the Pi.
     write(root / ".bios_config.json", '{"theme_path": "/Users/dev/theme"}')
+    # A developer's rendered baresip config (their own SIP account) must not ship.
+    write(root / ".baresip" / "accounts", "<sip:dev@laptop>;auth_pass=dev")
     # Local plugin symlinks (TDTM, bm-info-line) point at sibling checkouts that
     # do not exist on the Pi.
     (root / "plugins" / "TDTM").symlink_to("../../TDTM/tdtm")
@@ -64,6 +66,9 @@ def make_pi_payphone(root: Path) -> Path:
     write(root / "audio_files" / "bios" / "recorded.wav", "recording in tracked dir")
     write(root / "recordings" / "r1.wav", "tdtm recording")
     write(root / "user-instructions" / "note.txt", "tdtm instructions")
+    # baresip config rendered on the Pi by baresip.service.
+    write(root / ".baresip" / "accounts", "<sip:463@10.0.0.1>;auth_pass=pi")
+    write(root / ".baresip" / "uuid", "pi-uuid")
     # A theme pack installed with `install.py --copy`.
     write(root / "plugins" / "klaus-line" / "system.py", "theme plugin")
     write(root / "plugins" / "klaus-line" / "manifest.json", "{}")
@@ -90,6 +95,7 @@ def test_filter_script_protects_required_paths():
     assert "- /.bios_config.json" in rules
     assert "- /audio_files/lam_messages/" in rules
     assert "P /audio_files/**.wav" in rules
+    assert "- /.baresip/" in rules
 
 
 @requires_rsync
@@ -126,6 +132,8 @@ def test_deploy_filters_keep_pi_state_and_still_update_code(tmp_path):
     assert (pi / "audio_files" / "bios" / "recorded.wav").exists()
     assert (pi / "recordings" / "r1.wav").exists()
     assert (pi / "user-instructions" / "note.txt").exists()
+    assert (pi / ".baresip" / "accounts").read_text() == "<sip:463@10.0.0.1>;auth_pass=pi"
+    assert (pi / ".baresip" / "uuid").exists()
     assert (pi / "plugins" / "klaus-line" / "system.py").read_text() == "theme plugin"
     assert (pi / "audio_files" / "klaus-line" / "witness" / "ada.mp3").exists()
 

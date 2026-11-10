@@ -17,6 +17,11 @@
 # BIOS state: last_system, theme_path set by a theme pack's install.py, scan paths.
 - /.bios_config.json
 
+# baresip config rendered on the Pi by baresip.service (payphone.voip.account):
+# accounts holds the SIP password, and baresip writes its uuid here. A developer's
+# local .baresip/ must never replace it.
+- /.baresip/
+
 # Leave a Message (LAM) caller recordings.
 - /audio_files/lam_messages/
 
