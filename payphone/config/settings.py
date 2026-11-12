@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+from .persistence import REPOSITORY_ROOT
 
 # Load local development defaults, then deployment settings when present.
 load_dotenv()
@@ -30,7 +31,7 @@ class Config:
         HOOK_SWITCH_PIN = int(os.getenv('HOOK_SWITCH_PIN', '17'))
     
     # Audio settings
-    AUDIO_DIR = os.getenv('AUDIO_DIR', 'audio_files')
+    AUDIO_DIR = str((REPOSITORY_ROOT / Path(os.getenv('AUDIO_DIR', 'audio_files')).expanduser()).resolve())
     SAMPLE_RATE = int(os.getenv('SAMPLE_RATE', '44100'))
     
     # Phone tree settings

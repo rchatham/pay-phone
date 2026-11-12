@@ -1,124 +1,131 @@
-"""
-Configuration manager for BIOS/Bootloader system.
-
-Handles persistent storage of system selection and BIOS settings.
-"""
-
+"""Validated BIOS state; public selections never become persistent defaults."""
+import copy
 import json
-import os
 import logging
-from typing import Dict, List, Optional, Any
+import re
 from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from ..config.persistence import REPOSITORY_ROOT, atomic_write_json, state_directory
 
 logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
-    """Manages BIOS configuration and persistence"""
-
     DEFAULT_CONFIG = {
-        "last_system": None,
+        "default_system": None,
+        "last_system": None,  # Legacy informational field, never used for boot.
         "auto_launch": False,
         "always_show_menu_on_pickup": True,
         "bios_enter_hold_seconds": 0.0,
         "bios_exit_long_press_seconds": 5.0,
-        "scan_paths": [
-            "./phone_systems",
-            "./plugins"
-        ],
-        "available_systems": []
+        "escape_sequence": "***#",
+        "escape_timeout": 1.0,
+        "scan_paths": ["phone_systems", "plugins"],
+        "available_systems": [],
     }
 
-    def __init__(self, config_path: str = ".bios_config.json"):
-        """
-        Initialize config manager.
-
-        Args:
-            config_path: Path to configuration file
-        """
-        self.config_path = Path(config_path)
+    def __init__(self, config_path: Optional[str] = None):
+        self.config_path = Path(config_path) if config_path else state_directory() / "bios.json"
         self.config = self._load_config()
 
+    @classmethod
+    def _validate(cls, data: dict) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            raise ValueError("BIOS state must be an object")
+        result = {**copy.deepcopy(cls.DEFAULT_CONFIG), **data}
+        for field in ("default_system", "last_system"):
+            value = result[field]
+            if value is not None and (not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", value)):
+                raise ValueError(f"Invalid {field}")
+        paths = result["scan_paths"]
+        if not isinstance(paths, list) or len(paths) > 32 or any(not isinstance(p, str) or not p or len(p) > 4096 for p in paths):
+            raise ValueError("Invalid scan paths")
+        for field in ("auto_launch", "always_show_menu_on_pickup"):
+            if not isinstance(result[field], bool):
+                raise ValueError(f"Invalid {field}")
+        sequence = result["escape_sequence"]
+        if not isinstance(sequence, str) or not 3 <= len(sequence) <= 12 or any(k not in "0123456789*#" for k in sequence):
+            raise ValueError("Invalid escape sequence")
+        interval = result["escape_timeout"]
+        if isinstance(interval, bool) or not isinstance(interval, (int, float)) or not 0.2 <= interval <= 5:
+            raise ValueError("Invalid escape timeout")
+        if not isinstance(result["available_systems"], list):
+            raise ValueError("Invalid available systems")
+        return result
+
     def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or create default"""
-        if self.config_path.exists():
-            try:
-                with open(self.config_path, 'r') as f:
-                    config = json.load(f)
-                logger.info(f"Loaded BIOS config from {self.config_path}")
-                # Merge with defaults for any missing keys
-                return {**self.DEFAULT_CONFIG, **config}
-            except Exception as e:
-                logger.error(f"Error loading config: {e}, using defaults")
-                return self.DEFAULT_CONFIG.copy()
-        else:
-            logger.info("No BIOS config found, creating default")
-            config = self.DEFAULT_CONFIG.copy()
-            self.save_config(config)
-            return config
-
-    def save_config(self, config: Optional[Dict[str, Any]] = None) -> None:
-        """
-        Save configuration to file.
-
-        Args:
-            config: Config dict to save (uses self.config if None)
-        """
-        if config is None:
-            config = self.config
-
+        source = self.config_path
+        migrate = False
+        if not source.exists() and source == state_directory() / "bios.json":
+            source = REPOSITORY_ROOT / ".bios_config.json"
+            migrate = source.exists()
+        if not source.exists():
+            return copy.deepcopy(self.DEFAULT_CONFIG)
         try:
-            with open(self.config_path, 'w') as f:
-                json.dump(config, f, indent=2)
-            logger.info(f"Saved BIOS config to {self.config_path}")
-        except Exception as e:
-            logger.error(f"Error saving config: {e}")
+            if source.stat().st_size > 65536:
+                raise ValueError("BIOS state exceeds size limit")
+            data = self._validate(json.loads(source.read_text(encoding="utf-8")))
+        except (OSError, ValueError, TypeError, RecursionError) as exc:
+            logger.error("Invalid BIOS state at %s; using safe defaults: %s", source, exc)
+            return copy.deepcopy(self.DEFAULT_CONFIG)
+        if migrate:
+            # Copy legacy settings, but never infer intent from last_system/auto_launch.
+            data["default_system"] = None
+            try:
+                atomic_write_json(self.config_path, data)
+            except OSError as exc:
+                logger.error("Could not migrate BIOS state: %s", exc)
+        return data
+
+    def save_config(self, config: Optional[Dict[str, Any]] = None, *,
+                    commit: Optional[Callable[[Callable[[], None]], None]] = None) -> None:
+        validated = self._validate(self.config if config is None else config)
+        atomic_write_json(self.config_path, validated, commit=commit)
+        self.config = validated
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Get configuration value"""
-        return self.config.get(key, default)
+        return copy.deepcopy(self.config.get(key, default))
 
-    def set(self, key: str, value: Any) -> None:
-        """Set configuration value and save"""
-        self.config[key] = value
-        self.save_config()
+    def set(self, key: str, value: Any, *,
+            commit: Optional[Callable[[Callable[[], None]], None]] = None) -> None:
+        candidate = copy.deepcopy(self.config)
+        candidate[key] = value
+        self.save_config(candidate, commit=commit)
+
+    def get_default_system(self) -> Optional[str]:
+        return self.config["default_system"]
+
+    def set_default_system(self, system_id: Optional[str], *,
+                           commit: Optional[Callable[[Callable[[], None]], None]] = None) -> None:
+        self.set("default_system", system_id, commit=commit)
 
     def get_last_system(self) -> Optional[str]:
-        """Get the last selected system ID"""
-        return self.config.get("last_system")
+        return self.config["last_system"]
 
     def set_last_system(self, system_id: str) -> None:
-        """Set the last selected system ID"""
         self.set("last_system", system_id)
 
     def get_auto_launch(self) -> bool:
-        """Check if auto-launch is enabled"""
-        return self.config.get("auto_launch", self.DEFAULT_CONFIG["auto_launch"])
+        return self.config["auto_launch"]
 
     def get_always_show_menu_on_pickup(self) -> bool:
-        """Check if pickup should always enter the BIOS/main menu."""
-        return self.config.get("always_show_menu_on_pickup", self.DEFAULT_CONFIG["always_show_menu_on_pickup"])
+        return self.config["always_show_menu_on_pickup"]
 
     def get_scan_paths(self) -> List[str]:
-        """Get list of paths to scan for phone systems"""
-        return self.config.get("scan_paths", [])
+        return [str((REPOSITORY_ROOT / Path(p).expanduser()).resolve()) for p in self.config["scan_paths"]]
 
     def add_scan_path(self, path: str) -> None:
-        """Add a path to scan for phone systems"""
-        paths = self.get_scan_paths()
+        paths = self.get("scan_paths")
         if path not in paths:
-            paths.append(path)
-            self.set("scan_paths", paths)
+            self.set("scan_paths", paths + [path])
 
     def update_available_systems(self, systems: List[Dict[str, str]]) -> None:
-        """Update list of discovered systems"""
-        self.config["available_systems"] = systems
-        self.save_config()
+        # Discovery is a volatile snapshot, not a reason to overwrite saved state.
+        self.config["available_systems"] = copy.deepcopy(systems)
 
     def get_bios_enter_hold_seconds(self) -> float:
-        """Get seconds to hold hook to enter BIOS"""
-        return self.config.get("bios_enter_hold_seconds", 3.0)
+        return 0.0
 
     def get_bios_exit_long_press_seconds(self) -> float:
-        """Get seconds to hold * to return to BIOS"""
-        return self.config.get("bios_exit_long_press_seconds", 5.0)
+        return self.config["bios_exit_long_press_seconds"]

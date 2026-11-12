@@ -365,6 +365,16 @@ If you prefer not to use 1Password:
 
 **Note**: This is less secure - secrets are stored in plaintext on disk.
 
+## BIOS administrator credential
+
+Provision a **separate** `BIOS_ADMIN_PASSCODE` through the deployment environment/secret manager: 6–12 ASCII numeric digits, with no default. Do not reuse a public extension, put this value in `bios.json`/Booth JSON, commit it, print it, or type it into a shell command that retains history. Missing/invalid provisioning disables handset administration. Restart the service after credential changes.
+
+The public `***#` escape is an application reset only, not authentication. PIN entry is bounded, constant-time compared, and protected by an in-process failed-attempt cooldown. Hangup, escape, exit and inactivity revoke the capability. No Python hardware/core input logs contain entered digits. Verify separate firmware/serial capture and external logging on the actual device. Cooldown resets on process restart and does not protect against a privileged local operator.
+
+Protect `PAYPHONE_STATE_DIR` (or root `.payphone_state/`) and any local JSON/recordings as private operator-controlled data; locally writable configuration is an intentional OS-level administration path. New state files/directories use 0600/0700, but existing directories require an operator permissions audit. Scan paths contain trusted executable Python code, not untrusted content. Atomic save failures are explicit; directory-fsync failure after replacement can leave uncertain durability.
+
+See [BIOS_ADMIN.md](BIOS_ADMIN.md) for exact provisioning rules, escape overrides, authenticated handset menus, migration/persistence behavior and hardware-only verification requirements.
+
 ---
 
 **Next:** See [DEVELOPMENT.md](DEVELOPMENT.md) for development workflow and [WALKTHROUGH.md](WALKTHROUGH.md) for a complete tutorial.

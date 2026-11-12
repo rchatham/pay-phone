@@ -64,9 +64,9 @@ class SerialHandler:
     def _process_data(self, data: str):
         """Process incoming serial data"""
         if data.startswith("KEY:"):
-            key = data.split(":")[1]
-            self.input_queue.put(key)
-            logger.debug(f"Keypad: {key}")
+            key = data.partition(":")[2]
+            if len(key) == 1 and key in "0123456789*#":
+                self.input_queue.put(key)
         elif data.startswith("HOOK:"):
             status = data.split(":")[1]
             if self.hook_callback:

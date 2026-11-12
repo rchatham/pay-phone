@@ -32,6 +32,10 @@ htmlcov/
 *.cover
 .hypothesis/
 
+# Private persistent phone configuration and recordings
+.payphone_state/
+.bios_config.json
+
 # Secrets & Configuration
 .env
 .env.local

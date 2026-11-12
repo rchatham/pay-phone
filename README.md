@@ -3,7 +3,7 @@ This repository has code and circuit plans to hack a 1995 Pay Phone. https://img
 
 ### Getting Started
 
-Start with a Rasbian Buster Lite base image.
+Use a current Raspberry Pi OS Lite image with Python 3.10 or newer. The Information Booth's dynamic spoken menus also require `espeak-ng` (`sudo apt-get install espeak-ng`). Older Raspbian Buster/Python 3.7 installations need upgrading before using the new standard system.
 
 - `sudo apt-get update`
 - `sudo apt-get upgrade`
@@ -56,6 +56,15 @@ For simulator/app testing:
 ENABLE_RECORDING=true RECORDING_DEVICE=<device> make run-simulator
 ```
 
+
+### Information Booth and BIOS Administration
+
+The standard **Information Booth System** provides weather, current time, jokes, local music, and configurable information categories/messages. Its protected on-phone editor can record category labels and messages and change service settings after assembly.
+
+- [Information Booth setup and controls](phone_systems/information_booth/README.md)
+- [Protected BIOS administration and persistent startup selection](docs/BIOS_ADMIN.md)
+
+Provision a separate `BIOS_ADMIN_PASSCODE` before enabling administration; there is no default passcode. The reserved keypad sequence `***#` returns to BIOS authentication without rebooting Linux. An administrator can explicitly save or clear the default system. That selection survives power loss; with no valid default, pickup opens the public system picker as before. A visitor's selection does not change the saved default.
 
 ### Components
 - [Raspberry Pi Zero W](https://www.adafruit.com/product/3400)
