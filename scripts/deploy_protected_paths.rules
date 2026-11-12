@@ -1,0 +1,28 @@
+# Pi-side state that scripts/deploy_to_pi.sh must never delete.
+#
+# This is an rsync filter file (see FILTER RULES in `man rsync`). It is merged
+# before every other rule, so it wins over the per-directory includes that the
+# deploy script derives from `git ls-files`.
+#
+#   P <pattern>   protect: never deleted on the Pi, but still updated when the
+#                 same path is tracked in this repo (tracked DTMF .wav tones
+#                 keep deploying; caller recordings are left alone).
+#   - <pattern>   exclude: never transferred to the Pi and never deleted there.
+#                 Use this for files whose Pi copy must not be clobbered by a
+#                 developer's local copy.
+#
+# A leading "/" anchors the pattern to the repo root (~/payphone on the Pi).
+# "**" matches across directory boundaries.
+
+# BIOS state: last_system, theme_path set by a theme pack's install.py, scan paths.
+- /.bios_config.json
+
+# Leave a Message (LAM) caller recordings.
+- /audio_files/lam_messages/
+
+# Any recording written under audio_files/ by a system (LAM, theme packs, ...).
+P /audio_files/**.wav
+
+# Talk Dirty To Me (TDTM) recordings and caller instructions (relative to cwd).
+- /recordings/
+- /user-instructions/

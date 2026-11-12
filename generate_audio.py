@@ -211,16 +211,6 @@ def generate_with_gtts(text: str, output_path: Path) -> None:
     gTTS(text=text, lang="en", slow=False).save(str(output_path))
 
 
-def _is_mp3(path: Path) -> bool:
-    with path.open("rb") as audio_file:
-        header = audio_file.read(3)
-    has_id3_header = header == b"ID3"
-    has_mpeg_frame_sync = (
-        len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0
-    )
-    return has_id3_header or has_mpeg_frame_sync
-
-
 def _convert_to_mp3(input_path: Path, output_path: Path) -> None:
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg is required to convert generated audio to MP3")
@@ -372,16 +362,25 @@ def generate_audio_file(
     print(f"  ✓ Saved to {filepath}")
 
 
+def _ordered_bios_systems(systems):
+    return sorted(systems.items(), key=lambda item: item[1].name)
+
+
 def discover_bios_prompts() -> dict[str, AudioPrompt]:
+    from types import SimpleNamespace
+
     from payphone.bios.system_manager import SystemManager
 
     manager = SystemManager(scan_paths=["./phone_systems", "./plugins"])
     systems = manager.discover_systems()
+    if "TDTM" not in systems and Path("plugins/TDTM").exists():
+        systems["TDTM"] = SimpleNamespace(name="Talk Dirty To Me")
+    ordered_systems = _ordered_bios_systems(systems)
     prompts: dict[str, AudioPrompt] = {}
 
-    if systems:
+    if ordered_systems:
         menu_parts = ["Welcome to payphone BIOS."]
-        for idx, info in enumerate(systems.values(), start=1):
+        for idx, (_, info) in enumerate(ordered_systems, start=1):
             menu_parts.append(f"Press {idx} for {info.name}.")
         prompts["bios/main_menu.mp3"] = {"text": " ".join(menu_parts), "voice": "nova"}
     else:
@@ -390,7 +389,7 @@ def discover_bios_prompts() -> dict[str, AudioPrompt]:
             "voice": "nova",
         }
 
-    for system_id, info in systems.items():
+    for system_id, info in ordered_systems:
         prompts[f"bios/system_{system_id}.mp3"] = {
             "text": info.name,
             "voice": "shimmer",
@@ -453,6 +452,7 @@ def parse_args() -> argparse.Namespace:
         help="Only generate prompt paths with this relative prefix; may be passed more than once",
     )
     parser.add_argument("--no-bios", action="store_true", help="Skip dynamic BIOS menu/system prompts")
+    parser.add_argument("--skip-existing", action="store_true", help="Do not regenerate audio files that already exist")
     return parser.parse_args()
 
 
@@ -481,9 +481,14 @@ def main() -> None:
             print(f"Skipping: {relative_path} (sound effect)")
             continue
 
+        output_path = audio_dir / relative_path
+        if args.skip_existing and output_path.exists():
+            print(f"Skipping: {relative_path} (already exists)")
+            continue
+
         try:
             generate_audio_file(
-                audio_dir / relative_path,
+                output_path,
                 config["text"],
                 provider,
                 config.get("voice", "alloy"),

@@ -298,6 +298,40 @@ make deploy-full
 ./scripts/deploy_to_pi.sh --skip-secrets
 ```
 
+**Preview a deploy (recommended before deploying to a Pi with live recordings):**
+```bash
+./scripts/deploy_to_pi.sh --dry-run
+```
+Runs rsync with `--dry-run`, prints every file it would transfer, then lists the
+files it would delete on the Pi. Nothing on the Pi is changed and the install,
+secrets, permissions and restart steps are skipped.
+
+#### What deploy protects on the Pi
+
+The sync uses `rsync --delete`, so by default anything under `~/payphone` on the
+Pi that is not in this repo would be removed. Two layers prevent that:
+
+| Protected path | Why | Rule |
+|----------------|-----|------|
+| `.bios_config.json` | BIOS `last_system`, `theme_path` (set by a theme pack's `install.py`), scan paths | excluded both ways |
+| `audio_files/lam_messages/` | Leave a Message caller recordings | excluded both ways |
+| `audio_files/**.wav` | any recording under `audio_files/` | protected from delete; tracked `.wav` (DTMF tones) still deploy |
+| `recordings/`, `user-instructions/` | TDTM recordings and instructions | excluded both ways |
+| `plugins/<dir>/`, `audio_files/<dir>/` not tracked in git | theme packs installed with `install.py --copy` (e.g. `plugins/klaus-line/`, `audio_files/klaus-line/`) | only git-tracked directories are synced |
+
+The first four live in [`scripts/deploy_protected_paths.rules`](../scripts/deploy_protected_paths.rules)
+(an rsync filter file: `- pattern` excludes, `P pattern` protects from deletion).
+Add a line there to protect more state. The last one is derived from `git ls-files`
+by [`scripts/deploy_rsync_filters.sh`](../scripts/deploy_rsync_filters.sh): a new
+audio or plugin directory deploys once it is committed. Local plugin symlinks
+(`plugins/TDTM`, `plugins/bm-info-line`) are no longer shipped as dangling links.
+
+Known limitation: a theme pack's `audio_files/bios/*.mp3` overrides share names
+with tracked files, so a deploy re-installs the generic BIOS prompts. Re-run the
+pack's `install.py --copy` on the Pi after deploying.
+
+`tests/unit/test_deploy_filters.py` runs these rules against a local rsync.
+
 #### Step 4: Verify Deployment
 
 ```bash
