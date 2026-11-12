@@ -26,7 +26,8 @@ try:
     import numpy  # Make sure NumPy is loaded before it is used in the callback
     _RECORDING_AVAILABLE = True
     _IMPORT_ERROR: Optional[str] = None
-except ImportError as exc:
+except (ImportError, OSError) as exc:
+    # Installed bindings can still lack the native PortAudio/libsndfile library.
     sd = None
     sf = None
     _RECORDING_AVAILABLE = False
