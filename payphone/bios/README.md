@@ -11,11 +11,18 @@ The BIOS (Basic Input/Output System) provides a bootloader interface for the pay
 ### 1. **BIOS Menu on Pickup** (default)
 - **Pick up the handset** → the BIOS menu plays and you dial a digit to launch a system
 - Controlled by `always_show_menu_on_pickup: true` and `auto_launch: false` in `.bios_config.json`
-- **Legacy auto-launch** (opt-in): set `auto_launch: true`, `always_show_menu_on_pickup: false`
-  and `bios_enter_hold_seconds` > 0. Pick up → the last selected system launches after the
-  hold window; keep the handset lifted for `bios_enter_hold_seconds` without hanging up to
-  enter the BIOS menu instead. With the default `bios_enter_hold_seconds: 0.0` the hold
-  check always passes, so legacy mode still opens the menu.
+- **Legacy auto-launch** (opt-in, e.g. art phones): set `auto_launch: true` and
+  `always_show_menu_on_pickup: false`. With `bios_enter_hold_seconds: 0.0`, picking up
+  launches the last selected system immediately. With a value > 0, the BIOS waits that long
+  after pickup and opens the BIOS menu if the handset is still lifted.
+- **Pickup routes**: a key *held while the handset is lifted* chooses what starts. With
+  `"pickup_routes": {"9": "bm-network"}`, hold 9 while the phone is hung up, lift the handset
+  with 9 still pressed, and `bm-network` launches directly. An ordinary pickup still gets the
+  BIOS menu or auto-launch, and so does tapping 9 and letting go before lifting. A route
+  launch does not change `last_system`. Keys pressed while hung up never leak into the menu.
+  - GPIO keypads support this as is. Arduino keypads need the current
+    `arduino/payphone_controller` sketch, which reports key releases (`KEYUP:`); with older
+    firmware the routes are ignored and a warning is logged.
 
 ### 2. **Return to BIOS Anytime**
 - While any system is running, press and hold `*` key for 5 seconds to return to BIOS menu
@@ -87,6 +94,8 @@ Edit `.bios_config.json` in the project root:
     "./plugins"
   ],
   "theme_path": "",
+  "pickup_routes": null,
+  "pickup_route_release_grace_seconds": null,
   "available_systems": []
 }
 ```
@@ -95,7 +104,9 @@ Edit `.bios_config.json` in the project root:
 - `last_system`: ID of last selected system (auto-set by BIOS)
 - `auto_launch`: If true, auto-launch last system unless `always_show_menu_on_pickup` is enabled; if false (default), always show the BIOS menu
 - `always_show_menu_on_pickup`: If true (default), picking up the handset opens the BIOS menu immediately
-- `bios_enter_hold_seconds`: Legacy auto-launch mode only. Seconds the handset must stay lifted after pickup to enter the BIOS instead of auto-launching (default: 0.0, which means the BIOS menu always opens; set e.g. 3.0 to actually auto-launch)
+- `bios_enter_hold_seconds`: Legacy auto-launch mode only. 0.0 (default) launches the last system as soon as the handset is lifted; a value > 0 waits that long and then opens the BIOS menu if the handset is still lifted
+- `pickup_routes`: Map of key held while lifting → system id, e.g. `{"9": "bm-network"}`. One keypad key per route. `null` (default) uses the installed theme's `theme.json` `pickup_routes`; `{}` disables routes
+- `pickup_route_release_grace_seconds`: A key released at most this long before the lift is noticed still counts as held (`null` → the theme's value, else 0.75 seconds). The hook switch is debounced, so the lift is noticed 0.1–0.2 s after it happens; 0 requires the key to be down at that moment
 - `bios_exit_long_press_seconds`: Seconds to hold * to return to BIOS (default: 5.0)
 - `scan_paths`: Directories to scan for phone systems
 - `theme_path`: Filesystem path of an installed BIOS theme pack (contains `theme/theme.json`); empty for the default theme

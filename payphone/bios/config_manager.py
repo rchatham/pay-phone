@@ -27,6 +27,10 @@ class ConfigManager:
             "./plugins"
         ],
         "theme_path": "",
+        # Key held while lifting the handset -> system to launch, e.g. {"9": "bm-network"}.
+        # None means "not set here": the installed theme's theme.json decides.
+        "pickup_routes": None,
+        "pickup_route_release_grace_seconds": None,
         "available_systems": []
     }
 
@@ -127,3 +131,17 @@ class ConfigManager:
     def get_bios_exit_long_press_seconds(self) -> float:
         """Get seconds to hold * to return to BIOS"""
         return self.config.get("bios_exit_long_press_seconds", 5.0)
+
+    def get_pickup_routes(self) -> Optional[Dict[str, str]]:
+        """Pickup routes set in this file, or None to defer to the theme.
+
+        An explicit ``{}`` disables any routes a theme pack provides.
+        """
+        return self.config.get("pickup_routes")
+
+    def get_pickup_route_release_grace_seconds(self) -> Optional[float]:
+        """How recently a key may have been released and still count as held at lift.
+
+        None defers to the theme, then to the built-in default.
+        """
+        return self.config.get("pickup_route_release_grace_seconds")

@@ -4,12 +4,20 @@ BIOS Bootloader system for payphone.
 Provides system selection menu, configuration, and hot-reloading capabilities.
 Supports:
 - Pick up handset to enter BIOS menu (default)
+- Pickup routes: a key held while the handset is lifted picks the system that
+  starts (e.g. hold 9 and lift for a network mode)
 - Long-press * for 5 seconds during system operation to return to BIOS
 - Optional legacy auto-launch of the last selected system
 - Dynamic discovery and loading of phone systems
 
 A launched system shares the BIOS's hardware and audio handlers, so it reads
 the same keypad input queue the BIOS started and inherits the off-hook state.
+
+Keypad input queue ownership:
+- On hook: nobody reads the queue. Keys pressed while hung up are discarded
+  when the handset is lifted, so they never leak into the next call.
+- Off hook: the BIOS menu or the launched system reads the queue; the
+  long-press-* monitor peeks at it while a launched system runs.
 """
 
 import inspect
@@ -17,13 +25,15 @@ import logging
 import queue
 import threading
 import time
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..audio.handler import AudioHandler
 from ..config.settings import Config
 from ..core.phone_tree import PhoneTree
 from ..core.system import PhoneSystemBase
 from .config_manager import ConfigManager
+from ..hardware.key_hold import KeyHold
+from .pickup_routes import DEFAULT_RELEASE_GRACE_SECONDS, match_pickup_route, normalize_routes
 from .system_manager import SystemManager, SystemInfo, load_theme
 
 logger = logging.getLogger(__name__)
@@ -66,6 +76,10 @@ class BIOSBootloader(PhoneSystemBase):
         self.long_press_monitor_thread: Optional[threading.Thread] = None
         self.stop_long_press_monitor = threading.Event()
 
+        # Pickup routes: same clock as the keypad's hold timestamps
+        self._clock = time.monotonic
+        self._warned_no_key_holds = False
+
         logger.info("BIOS Bootloader initialized")
 
     def hook_status_changed(self, off_hook: bool):
@@ -81,11 +95,26 @@ class BIOSBootloader(PhoneSystemBase):
             # Phone picked up
             self.phone_on_hook = False
 
+            # A routed key held while lifting chooses a system. Keys pressed
+            # while hung up are discarded either way.
+            target = self._take_pickup_route()
+            if target:
+                logger.info(f"Pickup route matched: launching {target}")
+                if self.launch_system(target, remember=False):
+                    return
+                logger.warning(f"Pickup route target {target!r} did not launch; normal pickup")
+
             # Enter the BIOS/main menu immediately when configured to do so.
             if self.bios_config.get_always_show_menu_on_pickup() or not self.bios_config.get_auto_launch():
                 logger.info("Entering BIOS menu on pickup")
                 self.in_bios_menu = True
                 self.start_call()
+                return
+
+            # Legacy auto-launch without a hold window: lift goes straight to
+            # the last system (art phones).
+            if self.hook_hold_threshold <= 0:
+                self.auto_launch_system()
                 return
 
             # Record pickup time for hold detection when legacy auto-launch is enabled.
@@ -116,6 +145,11 @@ class BIOSBootloader(PhoneSystemBase):
                 logger.info("Stopping current system due to hang-up")
                 self._stop_current_system()
 
+            # Nothing may read the keypad queue while on hook: the long-press
+            # monitor would otherwise keep pulling keys (and could reopen the
+            # BIOS menu on a hung-up phone).
+            self._halt_long_press_monitor()
+
             if self.current_call and self.current_call.is_alive():
                 self.end_call()
 
@@ -137,12 +171,15 @@ class BIOSBootloader(PhoneSystemBase):
         logger.info(f"Auto-launching last system: {last_system}")
         self.launch_system(last_system)
 
-    def launch_system(self, system_id: str) -> bool:
+    def launch_system(self, system_id: str, remember: bool = True) -> bool:
         """
         Launch a phone system by ID.
 
         Args:
             system_id: System identifier
+            remember: Save it as ``last_system`` (what legacy auto-launch
+                starts). Pickup routes pass False so pressing 9 for network
+                mode once does not change what the next caller gets.
 
         Returns:
             True if launched successfully, False otherwise
@@ -162,7 +199,8 @@ class BIOSBootloader(PhoneSystemBase):
         try:
             self.current_system = self._instantiate_system(system_class)
             self.current_system_id = system_id
-            self.bios_config.set_last_system(system_id)
+            if remember:
+                self.bios_config.set_last_system(system_id)
             self.in_bios_menu = False
 
             logger.info(f"Launched system: {system_id}")
@@ -242,8 +280,85 @@ class BIOSBootloader(PhoneSystemBase):
         system.phone_on_hook = True
         self.current_system = None
 
+    # ------------------------------------------------------------------
+    # Pickup routes: a key held while the handset is lifted
+    # ------------------------------------------------------------------
+
+    def _key_holds(self) -> Optional[List[KeyHold]]:
+        """Key holds from the hardware handler, or None if it cannot report them.
+
+        GPIO keypads always can. The serial handler can once the Arduino
+        firmware sends KEYUP lines; custom handlers may not implement
+        ``key_holds()`` at all.
+        """
+        reader = getattr(self.hardware_handler, "key_holds", None)
+        holds = reader() if callable(reader) else None
+        if not isinstance(holds, (list, tuple)):
+            return None
+        return list(holds)
+
+    def _pickup_route_settings(self) -> Tuple[Dict[str, str], float]:
+        """Routes and release grace: .bios_config.json first, then the theme's theme.json."""
+        routes_raw: Any = self.bios_config.get_pickup_routes()
+        grace_raw: Any = self.bios_config.get_pickup_route_release_grace_seconds()
+        if routes_raw is None or grace_raw is None:
+            theme = load_theme(self.bios_config.get_theme_path()) or {}
+            if routes_raw is None:
+                routes_raw = theme.get("pickup_routes")
+            if grace_raw is None:
+                grace_raw = theme.get("pickup_route_release_grace_seconds")
+
+        try:
+            grace = float(grace_raw) if grace_raw is not None else DEFAULT_RELEASE_GRACE_SECONDS
+        except (TypeError, ValueError):
+            grace = DEFAULT_RELEASE_GRACE_SECONDS
+        if grace < 0:
+            grace = DEFAULT_RELEASE_GRACE_SECONDS
+        return normalize_routes(routes_raw), grace
+
+    def _take_pickup_route(self) -> Optional[str]:
+        """On lift: return the system routed by the key held while lifting, if any.
+
+        Always discards the keys queued while on hook (including the held
+        key's own press), so they never reach the BIOS menu or the launched
+        system.
+        """
+        try:
+            routes, grace = self._pickup_route_settings()
+            if not routes:
+                return None
+            holds = self._key_holds()
+            if holds is None:
+                if not self._warned_no_key_holds:
+                    logger.warning(
+                        "pickup_routes are configured but the keypad cannot report held keys "
+                        "(update the Arduino firmware); using the normal pickup"
+                    )
+                    self._warned_no_key_holds = True
+                return None
+            return match_pickup_route(holds, self._clock(), routes, grace)
+        except Exception:
+            logger.exception("Pickup route matching failed; using the normal pickup")
+            return None
+        finally:
+            self.clear_input_queue()
+
+    # ------------------------------------------------------------------
+    # Long-press * to return to the BIOS
+    # ------------------------------------------------------------------
+
+    def _halt_long_press_monitor(self) -> None:
+        """Stop the long-press-* monitor (on hang-up and shutdown)."""
+        self.stop_long_press_monitor.set()
+        thread = self.long_press_monitor_thread
+        if thread and thread.is_alive() and thread is not threading.current_thread():
+            thread.join(timeout=1.0)
+        self.long_press_monitor_thread = None
+        self.star_key_press_start = None
+
     def start_long_press_monitor(self):
         """Start monitoring for long-press * to return to BIOS"""
+        self._halt_long_press_monitor()
         self.stop_long_press_monitor.clear()
         self.long_press_monitor_thread = threading.Thread(
             target=self._long_press_monitor_loop,
@@ -267,8 +382,11 @@ class BIOSBootloader(PhoneSystemBase):
                             self.star_key_press_start = time.time()
                             logger.debug("* key pressed, monitoring for long-press")
 
-                        # Check if held long enough
+                        # Check if held long enough (give up if stopped, e.g. hang-up)
                         while self.star_key_press_start is not None:
+                            if self.stop_long_press_monitor.is_set() or self.phone_on_hook:
+                                self.star_key_press_start = None
+                                return
                             hold_time = time.time() - self.star_key_press_start
                             if hold_time >= self.long_press_threshold:
                                 logger.info(f"* key held for {hold_time:.1f}s - returning to BIOS")
@@ -400,9 +518,7 @@ class BIOSBootloader(PhoneSystemBase):
         logger.info("Shutting down BIOS bootloader...")
 
         # Stop long-press monitor
-        if self.long_press_monitor_thread:
-            self.stop_long_press_monitor.set()
-            self.long_press_monitor_thread.join(timeout=2)
+        self._halt_long_press_monitor()
 
         # Stop current system
         self._stop_current_system()

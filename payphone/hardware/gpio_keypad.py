@@ -5,6 +5,8 @@ import threading
 import logging
 from typing import List, Tuple, Optional
 
+from .key_hold import KeyHoldTracker
+
 logger = logging.getLogger(__name__)
 
 class GPIOKeypad:
@@ -40,6 +42,10 @@ class GPIOKeypad:
         # Debounce settings
         self.debounce_time = 0.3
         self.last_key_time = 0
+
+        # Which key is physically down right now, and when keys were released.
+        # The queue only carries key-down events; pickup routes need the hold.
+        self.hold_tracker = KeyHoldTracker()
         
     def setup(self):
         """Initialize GPIO pins for keypad"""
@@ -103,6 +109,14 @@ class GPIOKeypad:
             if scan_count % 500 == 0:
                 logger.debug(f"Keypad scanning active (scan #{scan_count})")
 
+            if key != last_key:
+                # Raw transition (before the press debounce): track the hold.
+                transition_time = time.monotonic()
+                if last_key:
+                    self.hold_tracker.key_up(last_key, transition_time)
+                if key:
+                    self.hold_tracker.key_down(key, transition_time)
+
             if key and key != last_key:
                 # New key pressed
                 current_time = time.time()
@@ -122,6 +136,7 @@ class GPIOKeypad:
     def stop(self):
         """Stop scanning and cleanup"""
         self.running = False
+        self.hold_tracker.release_all()
 
         # Wait for scanning thread to finish
         if hasattr(self, 'scan_thread') and self.scan_thread.is_alive():

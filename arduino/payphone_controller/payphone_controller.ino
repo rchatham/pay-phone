@@ -22,14 +22,27 @@ void setup() {
   Serial.begin(9600);
   pinMode(HOOK_PIN, INPUT_PULLUP);
   Serial.println("READY");
+  // Capabilities beyond the original KEY:/HOOK: protocol. Older Pi-side code
+  // ignores this line.
+  Serial.println("FEATURES:KEYUP");
 }
 
 void loop() {
-  // Check keypad
-  char key = keypad.getKey();
-  if (key) {
-    Serial.print("KEY:");
-    Serial.println(key);
+  // Check keypad. Report presses (KEY:) and releases (KEYUP:) so the Pi knows
+  // which key is still held, e.g. "hold 9 while lifting the handset".
+  if (keypad.getKeys()) {
+    for (int i = 0; i < LIST_MAX; i++) {
+      if (!keypad.key[i].stateChanged) {
+        continue;
+      }
+      if (keypad.key[i].kstate == PRESSED) {
+        Serial.print("KEY:");
+        Serial.println(keypad.key[i].kchar);
+      } else if (keypad.key[i].kstate == RELEASED) {
+        Serial.print("KEYUP:");
+        Serial.println(keypad.key[i].kchar);
+      }
+    }
   }
   
   // Check hook switch

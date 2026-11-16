@@ -103,10 +103,13 @@ class StubHardwareHandler:
     """Keypad/hook handler with a real input queue and no hardware."""
 
     def __init__(self):
+        from payphone.hardware.key_hold import KeyHoldTracker
+
         self.input_queue = Queue()
         self.hook_callback = None
         self.started = False
         self.stopped = False
+        self.hold_tracker = KeyHoldTracker()
 
     def start(self):
         self.started = True
@@ -119,9 +122,21 @@ class StubHardwareHandler:
         self.hook_callback = callback
 
     def press(self, *keys):
-        """Simulate keypad presses."""
+        """Simulate keypad presses (key-down events only, as the queue carries)."""
         for key in keys:
             self.input_queue.put(key)
+
+    def hold(self, key, at=None):
+        """Simulate a key going down and staying down: queued press + open hold."""
+        self.input_queue.put(key)
+        self.hold_tracker.key_down(key, at)
+
+    def release(self, key, at=None):
+        """Simulate letting go of a held key."""
+        self.hold_tracker.key_up(key, at)
+
+    def key_holds(self):
+        return self.hold_tracker.snapshot()
 
 
 # ============================================================================
@@ -299,7 +314,8 @@ def mock_payphone_system(tmp_path, monkeypatch, hardware_free_phone_systems, fak
     Runs in ``tmp_path`` so ``.bios_config.json`` is written there, with the
     scan path pointing at ``fake_system_dir``. Calls that would spawn threads
     (``start_call``, ``start_long_press_monitor``) are replaced with Mocks; drive
-    ``_call_handler()`` directly instead.
+    ``_call_handler()`` directly instead. Use ``hardware_handler.hold(key)`` /
+    ``release(key)`` to simulate a key held while the handset is lifted.
     """
     import json
 
