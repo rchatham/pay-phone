@@ -73,17 +73,65 @@ fi
 # Disable onboard audio
 sudo sed -i 's/dtparam=audio=on/#dtparam=audio=on/g' /boot/config.txt
 
-# Create audio configuration
+# Create audio configuration.
+# dmix (playback) and dsnoop (capture) let several programs open the card at
+# once: pygame plays prompts while baresip (VoIP) plays and records the call,
+# and LAM can record. `plug` on top converts each program's rate/channels.
+# Override for other cards, e.g. a mono USB dongle on card 2:
+#   AUDIO_CARD=2 AUDIO_CAPTURE_CHANNELS=1 ./scripts/setup_pi.sh
+AUDIO_CARD=${AUDIO_CARD:-1}
+AUDIO_RATE=${AUDIO_RATE:-48000}
+AUDIO_PLAYBACK_CHANNELS=${AUDIO_PLAYBACK_CHANNELS:-2}
+AUDIO_CAPTURE_CHANNELS=${AUDIO_CAPTURE_CHANNELS:-2}
+
+if [ -f /etc/asound.conf ] && ! grep -q "payphone_dmix" /etc/asound.conf; then
+    sudo cp /etc/asound.conf "/etc/asound.conf.bak.$(date +%Y%m%d%H%M%S)"
+    echo "Backed up previous /etc/asound.conf"
+fi
+
 sudo tee /etc/asound.conf > /dev/null <<EOF
+# Written by scripts/setup_pi.sh: shared access to sound card ${AUDIO_CARD}.
+pcm.payphone_dmix {
+    type dmix
+    ipc_key 1024
+    ipc_perm 0660
+    ipc_gid audio
+    slave {
+        pcm "hw:${AUDIO_CARD},0"
+        rate ${AUDIO_RATE}
+        channels ${AUDIO_PLAYBACK_CHANNELS}
+        period_size 1024
+        buffer_size 4096
+    }
+}
+pcm.payphone_dsnoop {
+    type dsnoop
+    ipc_key 1025
+    ipc_perm 0660
+    ipc_gid audio
+    slave {
+        pcm "hw:${AUDIO_CARD},0"
+        rate ${AUDIO_RATE}
+        channels ${AUDIO_CAPTURE_CHANNELS}
+        period_size 1024
+        buffer_size 4096
+    }
+}
+pcm.payphone_duplex {
+    type asym
+    playback.pcm "payphone_dmix"
+    capture.pcm "payphone_dsnoop"
+}
 pcm.!default {
-    type hw
-    card 1
+    type plug
+    slave.pcm "payphone_duplex"
 }
 ctl.!default {
     type hw
-    card 1
+    card ${AUDIO_CARD}
 }
 EOF
+echo "Audio: card ${AUDIO_CARD} shared via dmix/dsnoop at ${AUDIO_RATE} Hz"
 
 # Ask user about hardware mode
 echo "Select hardware mode:"
@@ -150,6 +198,55 @@ EOF
 # Create service override directory for environment file
 sudo mkdir -p /etc/systemd/system/payphone.service.d
 
+# Optional: baresip SIP client for VoIP calls (payphone/voip/).
+# Answer the prompt, or set INSTALL_BARESIP=yes|no to skip it.
+if [ -z "$INSTALL_BARESIP" ]; then
+    read -p "Install baresip for VoIP (SIP) calls? (y/N): " baresip_choice
+    case "$baresip_choice" in [Yy]*) INSTALL_BARESIP=yes ;; *) INSTALL_BARESIP=no ;; esac
+fi
+
+if [ "$INSTALL_BARESIP" = "yes" ]; then
+    echo -e "${BLUE}Installing baresip...${NC}"
+    # baresip-core has the ALSA, G.711, account, menu, ctrl_tcp and mwi modules
+    # without the GTK/video dependencies of the full `baresip` package.
+    sudo apt-get install -y baresip-core || sudo apt-get install -y baresip
+
+    BARESIP_DIR=/home/${USER}/payphone/.baresip
+    mkdir -p "$BARESIP_DIR"
+    chmod 700 "$BARESIP_DIR"
+
+    # The config is rendered from VOIP_* in /etc/payphone/.env before every
+    # start, so `make deploy` (inject_secrets.sh) + restart applies new settings.
+    # ctrl_tcp listens on 127.0.0.1:4444 only; payphone connects to it.
+    sudo tee /etc/systemd/system/baresip.service > /dev/null <<EOF
+[Unit]
+Description=baresip SIP client for the payphone (controlled over ctrl_tcp)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${USER}
+Group=${USER}
+SupplementaryGroups=audio
+WorkingDirectory=/home/${USER}/payphone
+Environment="PYTHONPATH=/home/${USER}/payphone"
+EnvironmentFile=-/etc/payphone/.env
+ExecStartPre=/usr/bin/python3 -m payphone.voip.account --config-dir ${BARESIP_DIR}
+ExecStart=/usr/bin/baresip -f ${BARESIP_DIR}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    echo -e "${GREEN}✓ baresip installed; baresip.service created (not enabled yet)${NC}"
+fi
+
 # Create directories
 echo -e "${BLUE}Creating project directories...${NC}"
 mkdir -p ~/payphone/audio_files/{menu,prompts,music}
@@ -190,8 +287,9 @@ fi
 echo ""
 echo "3. Check microphone input and LAM recording:"
 echo "   arecord -l"
-echo "   arecord --device=hw:0,0 --format S16_LE -V mono --rate 44100 -c1 test.wav"
-echo "   aplay test.wav"
+echo "   arecord -D default --format S16_LE -V mono --rate 44100 -c1 test.wav"
+echo "   aplay -D default test.wav"
+echo "   (use the 'default' device: hw:${AUDIO_CARD},0 is held by dmix/dsnoop)"
 echo "   ENABLE_RECORDING=true RECORDING_DEVICE=0 python3 ~/payphone/scripts/test_lam_recording.py"
 echo ""
 echo "4. Add audio files to:"
@@ -207,6 +305,14 @@ echo ""
 echo "7. Check status:"
 echo "   sudo systemctl status payphone.service"
 echo ""
+
+if [ "$INSTALL_BARESIP" = "yes" ]; then
+    echo "8. VoIP: set VOIP_SIP_URI / VOIP_PASSWORD (1Password item Payphone-VoIP,"
+    echo "   see docs/SECRETS_MANAGEMENT.md), run 'make deploy', then:"
+    echo "   sudo systemctl enable --now baresip.service"
+    echo "   journalctl -u baresip -f      # look for a successful REGISTER"
+    echo ""
+fi
 echo -e "${YELLOW}IMPORTANT: Reboot required for audio changes to take effect${NC}"
 echo "   sudo reboot"
 echo ""

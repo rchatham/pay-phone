@@ -82,6 +82,38 @@ If you plan to use cloud APIs:
    - Section: `Weather`
      - `api_key`: your weather API key
 
+### Create VoIP (SIP) Item (Optional)
+
+If the payphone joins a SIP network (see `payphone/voip/`), store its SIP
+account in 1Password:
+
+1. **Create new item**:
+   - **Vault**: Personal
+   - **Type**: Login or Password
+   - **Title**: `Payphone-VoIP`
+
+2. **Add fields**:
+   - `sip_uri`: this phone's address of record, e.g. `sip:463@10.0.0.1`
+   - `registrar`: optional; leave empty to register with the URI's host
+   - `password`: the SIP account password. Avoid spaces and `; " < > ,`, which
+     baresip's accounts file cannot hold.
+
+`load_secrets.sh` exports these as `VOIP_SIP_URI`, `VOIP_REGISTRAR` and
+`VOIP_PASSWORD`. If they are already set in your shell, your values win. That
+lets you deploy several phones from one item:
+
+```bash
+source scripts/load_secrets.sh
+VOIP_SIP_URI=sip:626@10.0.0.1 VOIP_PASSWORD=$(op read "op://Personal/Payphone-VoIP-626/password") make deploy
+```
+
+`inject_secrets.sh` writes them into `/etc/payphone/.env`, with
+`VOIP_ENABLED=true`, whenever `VOIP_SIP_URI` is set. On the Pi,
+`baresip.service` runs `python3 -m payphone.voip.account` before every start. That
+renders `~/payphone/.baresip/accounts` (mode 600) and `config` from those
+keys, so the password exists on the Pi only in `/etc/payphone/.env` and that
+accounts file. `deploy_to_pi.sh` never syncs or deletes `.baresip/`.
+
 ## Using Secrets in Your Workflow
 
 ### Load Secrets from 1Password
@@ -100,6 +132,7 @@ This exports environment variables:
 - `PI_SSH_KEY_PATH` (if applicable)
 - `OPENAI_API_KEY` (if configured)
 - `TWILIO_ACCOUNT_SID` (if configured)
+- `VOIP_SIP_URI`, `VOIP_REGISTRAR`, `VOIP_PASSWORD` (if configured)
 - etc.
 
 ### Deploy with Secrets
@@ -150,6 +183,9 @@ op://Personal/Payphone-Pi/password
 
 # OpenAI API key
 op://Personal/Payphone-APIs/OpenAI/api_key
+
+# SIP account password (VoIP)
+op://Personal/Payphone-VoIP/password
 
 # SSH key
 op://Personal/Payphone-Pi/ssh_private_key

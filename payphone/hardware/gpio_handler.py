@@ -83,6 +83,15 @@ class GPIOHandler:
         """Set callback for hook switch changes"""
         self.hook_switch.set_callback(callback)
 
+    def key_holds(self):
+        """Each key's latest hold (see payphone.hardware.key_hold.KeyHold).
+
+        Returns:
+            List of KeyHold, oldest press first. ``up_at`` is None for a key
+            that is still held down.
+        """
+        return self.keypad.hold_tracker.snapshot()
+
     def stop(self):
         """Stop all GPIO monitoring and cleanup"""
         self.running = False

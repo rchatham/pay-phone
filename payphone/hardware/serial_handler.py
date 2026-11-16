@@ -1,7 +1,9 @@
 import threading
 import queue
 import logging
-from typing import Callable, Optional
+from typing import Callable, List, Optional
+
+from .key_hold import KeyHold, KeyHoldTracker
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,12 @@ class SerialHandler:
         self.input_queue = queue.Queue()
         self.running = False
         self.hook_callback: Optional[Callable] = None
-        
+
+        # Key holds need firmware that sends KEYUP:<key> (see
+        # arduino/payphone_controller). Older firmware only sends KEY:<key>.
+        self.hold_tracker = KeyHoldTracker()
+        self.reports_key_up = False
+
     def connect(self) -> bool:
         """Establish serial connection with Arduino"""
         try:
@@ -65,8 +72,16 @@ class SerialHandler:
         """Process incoming serial data"""
         if data.startswith("KEY:"):
             key = data.split(":")[1]
+            self.hold_tracker.key_down(key)
             self.input_queue.put(key)
             logger.debug(f"Keypad: {key}")
+        elif data.startswith("KEYUP:"):
+            self.reports_key_up = True
+            self.hold_tracker.key_up(data.split(":")[1])
+        elif data.startswith("FEATURES:"):
+            if "KEYUP" in data.split(":", 1)[1].split(","):
+                self.reports_key_up = True
+                logger.info("Arduino firmware reports key releases")
         elif data.startswith("HOOK:"):
             status = data.split(":")[1]
             if self.hook_callback:
@@ -77,6 +92,16 @@ class SerialHandler:
     def set_hook_callback(self, callback: Callable):
         """Set callback for hook switch changes"""
         self.hook_callback = callback
+
+    def key_holds(self) -> Optional[List[KeyHold]]:
+        """Each key's latest hold, or None if the firmware cannot report releases.
+
+        Without KEYUP lines a pressed key would look held forever, so the
+        answer is "unknown" (None) until the firmware proves it sends them.
+        """
+        if not self.reports_key_up:
+            return None
+        return self.hold_tracker.snapshot()
         
     def stop(self):
         """Stop serial communication"""

@@ -45,3 +45,20 @@ def test_system_manager_discovers_hyphenated_plugin_without_leaking_sys_path(tmp
     assert "bm-info-line" not in systems["bm-info-line"].module_path
     assert __import__("sys").path == original_path
     assert issubclass(manager.load_system("bm-info-line"), PhoneSystemBase)
+
+
+def test_pickup_routes_default_to_unset_so_the_theme_decides(tmp_path):
+    config = ConfigManager(str(tmp_path / "bios.json"))
+
+    assert config.get_pickup_routes() is None
+    assert config.get_pickup_route_release_grace_seconds() is None
+
+
+def test_pickup_routes_read_from_bios_config(tmp_path):
+    config_path = tmp_path / "bios.json"
+    config_path.write_text('{"pickup_routes": {"9": "bm-network"}, "pickup_route_release_grace_seconds": 0.5}')
+
+    config = ConfigManager(str(config_path))
+
+    assert config.get_pickup_routes() == {"9": "bm-network"}
+    assert config.get_pickup_route_release_grace_seconds() == 0.5

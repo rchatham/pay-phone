@@ -103,6 +103,14 @@ export TWILIO_PHONE_NUMBER=$(op read "op://Personal/Payphone-APIs/Twilio/phone_n
 export WEATHER_API_KEY=$(op read "op://Personal/Payphone-APIs/Weather/api_key" 2>/dev/null || echo "")
 [ -n "$WEATHER_API_KEY" ] && echo -e "${GREEN}✓ Weather API key loaded${NC}"
 
+# VoIP SIP account (one per phone). Values already exported in your shell win,
+# so you can deploy several phones from one 1Password item by overriding
+# VOIP_SIP_URI / VOIP_PASSWORD per phone.
+export VOIP_SIP_URI=${VOIP_SIP_URI:-$(op read "op://Personal/Payphone-VoIP/sip_uri" 2>/dev/null || echo "")}
+export VOIP_REGISTRAR=${VOIP_REGISTRAR:-$(op read "op://Personal/Payphone-VoIP/registrar" 2>/dev/null || echo "")}
+export VOIP_PASSWORD=${VOIP_PASSWORD:-$(op read "op://Personal/Payphone-VoIP/password" 2>/dev/null || echo "")}
+[ -n "$VOIP_SIP_URI" ] && echo -e "${GREEN}✓ VoIP SIP account loaded${NC}"
+
 # -----------------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------------
@@ -121,6 +129,8 @@ echo "  PI_PORT: ${PI_PORT}"
 [ -n "$OPENAI_API_KEY" ] && echo "  OPENAI_API_KEY: ****"
 [ -n "$TWILIO_ACCOUNT_SID" ] && echo "  TWILIO_ACCOUNT_SID: ****"
 [ -n "$WEATHER_API_KEY" ] && echo "  WEATHER_API_KEY: ****"
+[ -n "$VOIP_SIP_URI" ] && echo "  VOIP_SIP_URI: ${VOIP_SIP_URI}"
+[ -n "$VOIP_PASSWORD" ] && echo "  VOIP_PASSWORD: ****"
 echo ""
 echo "You can now run deployment scripts:"
 echo "  ./scripts/deploy_to_pi.sh"

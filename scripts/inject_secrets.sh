@@ -130,6 +130,19 @@ if [ -n "$WEATHER_API_KEY" ]; then
     ENV_CONTENT+=$'\nWEATHER_API_KEY='"$WEATHER_API_KEY"
 fi
 
+# VoIP (SIP account for baresip). Enabled when a SIP URI is provided, unless
+# VOIP_ENABLED=false was exported explicitly.
+if [ -n "$VOIP_SIP_URI" ]; then
+    ENV_CONTENT+=$'\n\n# VoIP (SIP via baresip)'
+    ENV_CONTENT+=$'\nVOIP_ENABLED='"${VOIP_ENABLED:-true}"
+    ENV_CONTENT+=$'\nVOIP_SIP_URI='"$VOIP_SIP_URI"
+    ENV_CONTENT+=$'\nVOIP_REGISTRAR='"$VOIP_REGISTRAR"
+    ENV_CONTENT+=$'\nVOIP_PASSWORD='"$VOIP_PASSWORD"
+    if [ -n "$VOIP_CONFIG_DIR" ]; then
+        ENV_CONTENT+=$'\nVOIP_CONFIG_DIR='"$VOIP_CONFIG_DIR"
+    fi
+fi
+
 # -----------------------------------------------------------------------------
 # Upload environment file to Raspberry Pi
 # -----------------------------------------------------------------------------
@@ -206,6 +219,7 @@ echo "  - Menu settings"
 [ -n "$OPENAI_API_KEY" ] && echo "  - OpenAI API key"
 [ -n "$TWILIO_ACCOUNT_SID" ] && echo "  - Twilio API credentials"
 [ -n "$WEATHER_API_KEY" ] && echo "  - Weather API key"
+[ -n "$VOIP_SIP_URI" ] && echo "  - VoIP SIP account (${VOIP_SIP_URI})"
 echo ""
 echo "The payphone service will use these settings on next start."
 echo "Restart the service: ssh ${PI_USER}@${PI_HOST} 'sudo systemctl restart payphone'"
